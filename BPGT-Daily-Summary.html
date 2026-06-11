@@ -50,15 +50,17 @@
   }
 
   .header {
-    background: var(--blue);
-    padding: 14px 24px;
+    background: rgba(24,95,165,0.88);
+    backdrop-filter: blur(4px);
+    padding: 12px 24px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 10px;
-    position: relative;
-    z-index: 10;
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    z-index: 50;
     box-shadow: 0 2px 8px rgba(0,0,0,0.18);
   }
   .header-left { display: flex; align-items: center; gap: 12px; }
@@ -78,15 +80,16 @@
   #last-updated { font-size: 11px; color: rgba(255,255,255,0.45); white-space: nowrap; }
 
   .filter-bar {
-    background: #fff;
+    background: rgba(255,255,255,0.95);
     border-bottom: 1px solid var(--border);
     padding: 10px 24px;
     display: flex;
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
-    position: relative;
-    z-index: 9;
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    z-index: 49;
   }
   .filter-label { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-right: 2px; }
   .period-btn {
@@ -277,7 +280,7 @@
 
   /* ===== HERO BANNER ===== */
   .hero-banner {
-    position: relative; height: 220px; overflow: hidden;
+    position: relative; height: 340px; overflow: hidden;
     background: #0a1e46;
   }
   .hero-slides { position: absolute; inset: 0; }
@@ -293,8 +296,8 @@
   }
   .hero-content {
     position: absolute; inset: 0;
-    display: flex; align-items: flex-end; justify-content: center;
-    padding: 0 20px 18px; z-index: 2;
+    display: flex; align-items: center; justify-content: center;
+    padding: 60px 20px 50px; z-index: 2;
   }
   .hero-motto { color: #fff; text-align: center; text-shadow: 0 2px 10px rgba(0,0,0,0.6); }
   .hero-line1, .hero-line2 {
@@ -312,7 +315,7 @@
   }
   .hero-line3 em { font-style: normal; font-weight: 700; }
   @media (min-width: 600px) {
-    .hero-banner { height: 260px; }
+    .hero-banner { height: 380px; }
     .hero-line1, .hero-line2 { font-size: 17px; }
     .hero-line1 em, .hero-line2 em { font-size: 30px; }
     .hero-line3 { font-size: 14px; }
@@ -322,6 +325,23 @@
 </style>
 </head>
 <body>
+
+<div style="position:relative;">
+<div class="hero-banner">
+  <div class="hero-slides">
+    <div class="hero-slide active" style="background-image:url('hero1.jpg')"></div>
+    <div class="hero-slide" style="background-image:url('hero4.jpg')"></div>
+    <div class="hero-slide" style="background-image:url('hero2.jpg')"></div>
+  </div>
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <div class="hero-motto">
+      <div class="hero-line1">Excellence in <em>Every Move</em></div>
+      <div class="hero-line2">Guidance in <em>Every Step</em></div>
+      <div class="hero-line3">BPGT Service that Leads to <em>Passenger Satisfaction</em></div>
+    </div>
+  </div>
+</div>
 
 
 <div class="header">
@@ -362,23 +382,7 @@
   </div>
   <span class="filter-status" id="filter-status"></span>
 </div>
-
-<div class="hero-banner">
-  <div class="hero-slides">
-    <div class="hero-slide active" style="background-image:url('hero1.jpg')"></div>
-    <div class="hero-slide" style="background-image:url('hero4.jpg')"></div>
-    <div class="hero-slide" style="background-image:url('hero2.jpg')"></div>
-  </div>
-  <div class="hero-overlay"></div>
-  <div class="hero-content">
-    <div class="hero-motto">
-      <div class="hero-line1">Excellence in <em>Every Move</em></div>
-      <div class="hero-line2">Guidance in <em>Every Step</em></div>
-      <div class="hero-line3">BPGT Service that Leads to <em>Passenger Satisfaction</em></div>
-    </div>
-  </div>
 </div>
-
 
 <div class="main">
   <div id="status-msg" class="status-msg loading">⏳ Loading terminal data...</div>
