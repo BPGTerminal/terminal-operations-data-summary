@@ -761,7 +761,7 @@ function applyFilter() {
     var statusEl=document.getElementById('status-msg');
     statusEl.className='status-msg warn';
     statusEl.style.display='block';
-    statusEl.textContent='ℹ️ No trips recorded yet today. Showing this month's data instead.';
+    statusEl.textContent='ℹ️ No trips recorded yet today. Showing this months data instead.';
     rows=filterRows(allRows,'month');
     // Highlight "This month" button
     document.querySelectorAll('.period-btn').forEach(function(b){b.classList.remove('active');});
