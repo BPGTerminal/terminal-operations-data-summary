@@ -1,0 +1,25 @@
+{
+  "name": "BPGT Operations Summary",
+  "short_name": "BPGT Summary",
+  "description": "Brooke's Point Grand Terminal — Daily Operations Dashboard",
+  "start_url": "/terminal-operations-data-summary/BPGT-Daily-Summary.html",
+  "scope": "/terminal-operations-data-summary/",
+  "display": "standalone",
+  "background_color": "#185FA5",
+  "theme_color": "#185FA5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "bpgt-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "bpgt-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
