@@ -57,9 +57,8 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 10px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    position: relative;
+    z-index: 10;
     box-shadow: 0 2px 8px rgba(0,0,0,0.18);
   }
   .header-left { display: flex; align-items: center; gap: 12px; }
@@ -86,9 +85,8 @@
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
-    position: sticky;
-    top: 66px;
-    z-index: 99;
+    position: relative;
+    z-index: 9;
   }
   .filter-label { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-right: 2px; }
   .period-btn {
@@ -326,22 +324,6 @@
 <body>
 
 
-<div class="hero-banner">
-  <div class="hero-slides">
-    <div class="hero-slide active" style="background-image:url('hero1.jpg')"></div>
-    <div class="hero-slide" style="background-image:url('hero4.jpg')"></div>
-    <div class="hero-slide" style="background-image:url('hero2.jpg')"></div>
-  </div>
-  <div class="hero-overlay"></div>
-  <div class="hero-content">
-    <div class="hero-motto">
-      <div class="hero-line1">Excellence in <em>Every Move</em></div>
-      <div class="hero-line2">Guidance in <em>Every Step</em></div>
-      <div class="hero-line3">BPGT Service that Leads to <em>Passenger Satisfaction</em></div>
-    </div>
-  </div>
-</div>
-
 <div class="header">
   <div class="header-left">
     <img src="bpgt-logo.png" style="width:48px;height:48px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.3));" alt="BPGT Logo">
@@ -380,6 +362,23 @@
   </div>
   <span class="filter-status" id="filter-status"></span>
 </div>
+
+<div class="hero-banner">
+  <div class="hero-slides">
+    <div class="hero-slide active" style="background-image:url('hero1.jpg')"></div>
+    <div class="hero-slide" style="background-image:url('hero4.jpg')"></div>
+    <div class="hero-slide" style="background-image:url('hero2.jpg')"></div>
+  </div>
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <div class="hero-motto">
+      <div class="hero-line1">Excellence in <em>Every Move</em></div>
+      <div class="hero-line2">Guidance in <em>Every Step</em></div>
+      <div class="hero-line3">BPGT Service that Leads to <em>Passenger Satisfaction</em></div>
+    </div>
+  </div>
+</div>
+
 
 <div class="main">
   <div id="status-msg" class="status-msg loading">⏳ Loading terminal data...</div>
@@ -1386,51 +1385,61 @@ async function loadData() {
   var statusEl = document.getElementById('status-msg');
   var icon = document.getElementById('refresh-icon');
   statusEl.className = 'status-msg loading';
-  statusEl.textContent = '⏳ Fetching data from BPGT Google Sheets...';
+  statusEl.textContent = '⏳ Loading terminal data...';
   statusEl.style.display = 'block';
   document.getElementById('fix-instructions').style.display = 'none';
   icon.innerHTML = '<span class="spinner"></span>';
 
-  var success = false;
-  var debugLog = [];
-
-  /* ALSO fetch vendor data in parallel (non-blocking) */
+  /* Fetch vendor data in parallel */
   fetchVendorData().then(function(vrows){
     allVendorRows = vrows;
-    console.log('Vendor rows:', vrows.length);
-    if(allVendorRows.length>0 && document.getElementById('dashboard').style.display!=='none'){
+    if (allVendorRows.length > 0 && document.getElementById('dashboard').style.display !== 'none') {
       renderVendorSection(allVendorRows);
     }
-  }).catch(function(e){ console.log('Vendor error:', e); });
+  }).catch(function(){});
 
-  /* PRIMARY: Google Visualization API */
+  var success = false;
+
+  /* METHOD 1: GViz fetch (works on https://) */
   try {
-    debugLog.push('Trying GViz Sheet1...');
-    statusEl.textContent = '⏳ Trying Google Sheets GViz API...';
-    var rows = await fetchGViz('Sheet1');
-    debugLog.push('GViz Sheet1 returned ' + rows.length + ' rows');
+    statusEl.textContent = '⏳ Connecting to Google Sheets...';
+    var rows = await Promise.race([
+      fetchGViz('Sheet1'),
+      new Promise(function(_,reject){ setTimeout(function(){ reject(new Error('timeout')); }, 8000); })
+    ]);
     if (rows.length === 0) {
-      debugLog.push('Trying GViz with no sheet name...');
-      rows = await fetchGViz('');
-      debugLog.push('GViz (no name) returned ' + rows.length + ' rows');
+      rows = await Promise.race([
+        fetchGViz(''),
+        new Promise(function(_,reject){ setTimeout(function(){ reject(new Error('timeout')); }, 8000); })
+      ]);
     }
-    allRows = rows;
-    success = true;
-    debugLog.push('✅ GViz success! ' + allRows.length + ' total rows loaded.');
-    if (allRows.length > 0) debugLog.push('First row keys: ' + Object.keys(allRows[0]).join(', '));
+    if (rows.length > 0) { allRows = rows; success = true; }
   } catch(e1) {
-    debugLog.push('❌ GViz failed: ' + e1.message);
-    /* FALLBACK: Apps Script JSONP */
+    console.log('GViz failed:', e1.message);
+
+    /* METHOD 2: CSV via published Sheet */
     try {
-      debugLog.push('Trying JSONP fallback...');
-      statusEl.textContent = '⏳ Trying Apps Script JSONP...';
-      var rows2 = await fetchWithJSONP(SCRIPT_URL + '?action=getAll');
-      allRows = Array.isArray(rows2) ? rows2 : (rows2.data||rows2.rows||[]);
-      success = true;
-      debugLog.push('✅ JSONP success! ' + allRows.length + ' rows.');
+      statusEl.textContent = '⏳ Trying alternate connection...';
+      var csvUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/pub?output=csv&t=' + Date.now();
+      var csvRes = await Promise.race([
+        fetch(csvUrl),
+        new Promise(function(_,reject){ setTimeout(function(){ reject(new Error('timeout')); }, 8000); })
+      ]);
+      var csvText = await csvRes.text();
+      var csvRows = parseCSV(csvText);
+      if (csvRows.length > 0) { allRows = csvRows; success = true; }
     } catch(e2) {
-      debugLog.push('❌ JSONP failed: ' + e2.message);
-      success = false;
+      console.log('CSV failed:', e2.message);
+
+      /* METHOD 3: JSONP via Apps Script */
+      try {
+        statusEl.textContent = '⏳ Trying Apps Script...';
+        var data = await fetchWithJSONP(SCRIPT_URL + '?action=getAll');
+        var jrows = Array.isArray(data) ? data : (data.data||data.rows||[]);
+        if (jrows.length > 0) { allRows = jrows; success = true; }
+      } catch(e3) {
+        console.log('JSONP failed:', e3.message);
+      }
     }
   }
 
@@ -1440,14 +1449,13 @@ async function loadData() {
     applyFilter();
   } else if (success && allRows.length === 0) {
     statusEl.className = 'status-msg warn';
-    statusEl.textContent = '⚠️ Connected but no data found. Debug: ' + debugLog.join(' → ');
+    statusEl.textContent = 'ℹ️ Connected but no records found.';
     document.getElementById('dashboard').style.display = 'block';
     applyFilter();
   } else {
     statusEl.className = 'status-msg error';
-    statusEl.innerHTML = '❌ Could not load data.<br><small style="opacity:0.8;">Debug: ' + debugLog.join(' → ') + '</small>';
+    statusEl.innerHTML = '❌ Could not load data. Make sure the Google Sheet is shared as <b>"Anyone with the link can view"</b> then click Refresh.';
     document.getElementById('fix-instructions').style.display = 'block';
-    document.getElementById('dashboard').style.display = 'none';
   }
 
   icon.textContent = '↻';
