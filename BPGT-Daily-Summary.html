@@ -61,7 +61,7 @@
         }
         .header-left { display: flex; align-items: center; gap: 12px; }
         
-        /* Updated Logo Class to safely fetch local file path */
+        /* Updated Logo Class to fetch local background layout path safely */
         .header-icon { 
             width: 36px; 
             height: 36px; 
@@ -116,7 +116,14 @@
         .filter-status { font-size: 11px; color: var(--text-faint); margin-left: auto; white-space: nowrap; }
         .main { padding: 18px 24px; max-width: 1100px; margin: 0 auto; }
         
-        /* Slide styling extraction to prevent unescaped quote syntax crashes */
+        .status-msg {
+            padding: 10px 14px; border-radius: var(--radius-sm);
+            font-size: 13px; margin-bottom: 16px; display: none; line-height: 1.5;
+        }
+        .status-msg.loading { background: var(--blue-light); color: var(--blue); display: block; }
+        .status-msg.error { background: var(--red-light); color: var(--red); display: block; }
+        .status-msg.warn { background: var(--amber-light); color: var(--amber); display: block; }
+        
         .hero-banner {
             position: relative; height: 220px; overflow: hidden;
             background: #0a1e46;
@@ -129,7 +136,7 @@
         }
         .hero-slide.active { opacity: 1; }
         
-        /* Named local image mappings */
+        /* Local structural directory mappings for safety and scalability */
         .hero-slide.slide-1 { background-image: url('images/hero-bg-1.jpg'); }
         .hero-slide.slide-2 { background-image: url('images/hero-bg-2.jpg'); }
         
@@ -158,30 +165,60 @@
         }
         .hero-line3 em { font-style: normal; font-weight: 700; }
         
+        .footer {
+            text-align: center; padding: 20px; font-size: 11px;
+            color: var(--text-faint); border-top: 1px solid var(--border-light);
+            margin-top: 28px;
+        }
+        
         @media (min-width: 600px) {
             .hero-banner { height: 260px; }
             .hero-line1, .hero-line2 { font-size: 17px; }
             .hero-line1 em, .hero-line2 em { font-size: 30px; }
             .hero-line3 { font-size: 14px; }
         }
-        @media print { .hero-banner { display: none !important; } }
+        @media print { 
+            .hero-banner { display: none !important; }
+            .filter-bar { display: none !important; }
+            .hbtn { display: none !important; }
+        }
     </style>
 </head>
 <body>
+    <!-- HEADER BAR -->
     <header class="header">
         <div class="header-left">
-            <!-- No inner text inside the logo node needed since it maps via CSS background -->
             <div class="header-icon"></div>
             <div>
                 <h1 class="header-title">Brooke's Point Grand Terminal</h1>
                 <p class="header-sub">Operations Summary Dashboard</p>
             </div>
         </div>
+        <div class="header-right">
+            <span id="last-updated">Not yet loaded</span>
+            <button class="hbtn" onclick="loadData()"><span class="spinner" style="display:none;"></span> Refresh</button>
+            <button class="hbtn print-pdf" onclick="window.print()">Save PDF</button>
+            <button class="hbtn print-hard" onclick="window.print()">Print</button>
+        </div>
     </header>
 
+    <!-- FILTER SELECTION BAR -->
+    <nav class="filter-bar">
+        <span class="filter-label">Period:</span>
+        <button class="period-btn active" onclick="setPeriod('today', this)">Today</button>
+        <button class="period-btn" onclick="setPeriod('week', this)">This week</button>
+        <button class="period-btn" onclick="setPeriod('month', this)">This month</button>
+        <button class="period-btn" onclick="setPeriod('quarter', this)">This quarter</button>
+        <button class="period-btn" onclick="setPeriod('year', this)">This year</button>
+        <button class="period-btn" onclick="setPeriod('custom', this)">Date range</button>
+        <input type="date" id="start-date" class="date-input" onchange="handleCustomDateChange()">
+        <input type="date" id="end-date" class="date-input" onchange="handleCustomDateChange()">
+        <span id="filter-status" class="filter-status"></span>
+    </nav>
+
+    <!-- HERO BANNER -->
     <div class="hero-banner">
         <div class="hero-slides">
-            <!-- Refactored slide declarations linked directly to the CSS mappings -->
             <div class="hero-slide active slide-1"></div>
             <div class="hero-slide slide-2"></div>
         </div>
@@ -189,10 +226,3 @@
         <div class="hero-content">
             <div class="hero-motto">
                 <p class="hero-line1">Excellence in <em>Every Move</em></p>
-                <p class="hero-line2">Guidance in <em>Every Step</em></p>
-                <p class="hero-line3">BPGT Service that Leads to Passenger Satisfaction</p>
-            </div>
-        </div>
-    </div>
-</body>
-</html>
