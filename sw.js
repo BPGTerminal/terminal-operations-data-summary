@@ -1,5 +1,5 @@
 // BPGT Terminal Operations Data Summary — Service Worker v1.0
-const CACHE = 'bpgt-summary-v1';
+const CACHE = 'bpgt-terminal-ops-summary-v1';
 const ASSETS = [
   '/terminal-operations-data-summary/BPGT-Daily-Summary.html',
   '/terminal-operations-data-summary/manifest.json',
