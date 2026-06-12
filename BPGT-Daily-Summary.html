@@ -89,7 +89,7 @@
     gap: 6px;
     flex-wrap: wrap;
     position: sticky;
-    top: 0;
+    top: 68px;
     z-index: 99;
   }
   .filter-label { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-right: 2px; }
@@ -145,6 +145,11 @@
   .card {
     background: #fff; border: 1px solid var(--border-light);
     border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
   }
   .card-title { font-size: 11px; font-weight: 600; color: var(--text-faint); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
 
@@ -327,6 +332,22 @@
 </head>
 <body>
 
+<div class="hero-banner">
+  <div class="hero-slides">
+    <div class="hero-slide active" style="background-image:url('hero1.jpg')"></div>
+    <div class="hero-slide" style="background-image:url('hero4.jpg')"></div>
+    <div class="hero-slide" style="background-image:url('hero2.jpg')"></div>
+  </div>
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <div class="hero-motto">
+      <div class="hero-line1">Excellence in <em>Every Move</em></div>
+      <div class="hero-line2">Guidance in <em>Every Step</em></div>
+      <div class="hero-line3">BPGT Service that Leads to <em>Passenger Satisfaction</em></div>
+    </div>
+  </div>
+</div>
+
 <div class="header">
   <div class="header-left">
     <img src="bpgt-logo.png" style="width:48px;height:48px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.3));" alt="BPGT Logo">
@@ -365,22 +386,6 @@
   </div>
   <span class="filter-status" id="filter-status"></span>
 </div>
-</div>
-
-<div class="hero-banner">
-  <div class="hero-slides">
-    <div class="hero-slide active" style="background-image:url('hero1.jpg')"></div>
-    <div class="hero-slide" style="background-image:url('hero4.jpg')"></div>
-    <div class="hero-slide" style="background-image:url('hero2.jpg')"></div>
-  </div>
-  <div class="hero-overlay"></div>
-  <div class="hero-content">
-    <div class="hero-motto">
-      <div class="hero-line1">Excellence in <em>Every Move</em></div>
-      <div class="hero-line2">Guidance in <em>Every Step</em></div>
-      <div class="hero-line3">BPGT Service that Leads to <em>Passenger Satisfaction</em></div>
-    </div>
-  </div>
 </div>
 
 <div class="main">
@@ -450,7 +455,7 @@
     </div>
 
     <div class="section-label">Financial overview</div>
-    <div class="metric-grid" style="margin-bottom:10px;">
+    <div class="metric-grid" style="margin-bottom:10px;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));">
       <div class="metric-card accent-green">
         <div class="metric-label">Paid</div>
         <div class="metric-value" id="fin-paid">0</div>
@@ -1059,42 +1064,43 @@ function renderDashboard(rows) {
 
 /* ── VENDOR RENTALS ── */
 async function fetchVendorData() {
-  // Try JSONP via Apps Script first
+  // Method 1: JSONP via Apps Script
   try {
     var data = await Promise.race([
       fetchWithJSONP(VENDOR_SCRIPT + '?action=getAll'),
-      new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timeout')); }, 6000); })
+      new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'));},6000); })
     ]);
     var rows = Array.isArray(data) ? data : (data.data||data.rows||[]);
-    if (rows.length > 0) return rows;
-  } catch(e) {
-    console.log('Vendor JSONP failed:', e.message);
-  }
-  // Fallback: CSV from published vendor sheet
-  try {
-    var VENDOR_SHEET_ID = '1BpRflcXL7KGTgRETDflANqrb-xMXJBw4paMMOXIWh04n8ykcRXx2hdDPNHBJpY3C';
-    var csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-' + VENDOR_SHEET_ID + '/pub?output=csv&t=' + Date.now();
-    var res = await fetch(csvUrl);
-    var text = await res.text();
-    var rows = parseCSV(text);
-    console.log('Vendor CSV rows:', rows.length);
-    return rows;
-  } catch(e2) {
-    console.log('Vendor CSV also failed:', e2.message);
-    return [];
-  }
-}
+    if (rows.length > 0) { console.log('Vendor JSONP ok:', rows.length); return rows; }
+  } catch(e) { console.log('Vendor JSONP failed:', e.message); }
 
+  // Method 2: CSV from published Google Sheet (from Google AI suggestion)
+  try {
+    var vendorCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRPEm2aEvRxyI1BpRflcXL7KGTgRETDflANqrb-xMXJBw4paMMOXIWh04n8ykcRXx2hdDPNHBJpY3C/pub?output=csv&t=' + Date.now();
+    var res = await Promise.race([
+      fetch(vendorCsvUrl),
+      new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'));},8000); })
+    ]);
+    var text = await res.text();
+    if (text && text.length > 10 && !text.includes('<!DOCTYPE')) {
+      var rows = parseCSV(text);
+      console.log('Vendor CSV ok:', rows.length, 'rows. Headers:', rows.length>0?Object.keys(rows[0]).join(','):'none');
+      return rows;
+    }
+  } catch(e2) { console.log('Vendor CSV failed:', e2.message); }
+
+  return [];
+}
 function renderVendorSection(rows) {
   var filtered = filterRows(rows, currentPeriod);
   var total=0, paid=0, unpaid=0, count=filtered.length;
   var vendors={}, types={};
 
   filtered.forEach(function(r) {
-    var amt   = g(r,'AMOUNT','Amount','amount','RENTAL FEE','Rental Fee','FEE','Fee');
+    var amt   = g(r,'AMOUNT ','AMOUNT','Amount','amount','RENTAL FEE','Rental Fee','FEE','Fee','TOTAL','Total'); // AMOUNT with trailing space handles Google Sheets quirk
     var status= gs(r,'STATUS','Status','PAYMENT STATUS','Payment Status')||'';
-    var vendor= gs(r,'VENDOR','Vendor','VENDOR NAME','Vendor Name','NAME','Name')||'Unknown';
-    var type  = gs(r,'TYPE','Type','STALL TYPE','Stall Type','stall_type')||'General';
+    var vendor= gs(r,'STORE','Store','VENDOR','Vendor','VENDOR NAME','Vendor Name','NAME','Name','STALL','Stall')||'Unknown';
+    var type  = gs(r,'STALL TYPE','Stall Type','TYPE','Type','CATEGORY','Category','stall_type')||'General';
     var sl    = status.toLowerCase();
     total += amt;
     if(sl.includes('paid')&&!sl.includes('un')) paid+=amt;
