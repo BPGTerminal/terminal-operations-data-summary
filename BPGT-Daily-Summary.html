@@ -12,10 +12,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BPGT Terminal — Operations Summary</title>
 <style>
-  .card {
-  flex: 1 1 300px; /* This tells cards to grow and fill the empty space */
-  min-width: 300px;
-}
   :root {
     --blue: #185FA5;
     --blue-light: #E6F1FB;
@@ -35,7 +31,7 @@
     --gray-700: #2C2C2A;
     --text: #1a1a18;
     --text-muted: #5F5E5A;
-    --text-faint: #72716a;
+    --text-faint: #888780;
     --border: rgba(0,0,0,0.1);
     --border-light: rgba(0,0,0,0.06);
     --radius: 10px;
@@ -335,8 +331,7 @@
 </style>
 </head>
 <body>
-<main>
-</main>
+
 <div class="hero-banner">
   <div class="hero-slides">
     <div class="hero-slide active" style="background-image:url('hero1.jpg')"></div>
@@ -460,7 +455,7 @@
     </div>
 
     <div class="section-label">Financial overview</div>
-    <div class="metric-grid" style="margin-bottom:10px;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));">
+    <div class="metric-grid" style="margin-bottom:10px;grid-template-columns:repeat(4,1fr);">
       <div class="metric-card accent-green">
         <div class="metric-label">Paid</div>
         <div class="metric-value" id="fin-paid">0</div>
@@ -587,7 +582,7 @@
       <div>
         <div class="revenue-hero-label">Total vendor rent collected</div>
         <div class="revenue-hero-amount" id="vend-total">₱0</div>
-        <div class="revenue-hero-sub" id="vend-sub">Loading...</div>
+        <div class="revenue-hero-sub" id="vend-sub">Connecting to vendor sheet...</div>
       </div>
       <div class="revenue-breakdown">
         <div><div class="rev-item-label">Paid</div><div class="rev-item-val" id="vend-paid-amt">₱0</div></div>
@@ -642,7 +637,7 @@
 </div>
 
 <div class="footer" id="footer">
-  <img src="pagong-logo.png" style="width:40px; height:40px; opacity:1; filter:none;" alt="Logo"><br>
+  <img src="pagong-logo.png" style="width:36px;height:36px;vertical-align:middle;margin-right:6px;border-radius:50%;background:#fff;padding:3px;opacity:1;image-rendering:crisp-edges;" alt="pagong"><br>
   BPGT Terminal Monitoring System v4.4 · Brooke's Point Grand Terminal, Palawan<br>
   Built by Joey S. Heredero · <em>-=pagong=-</em> · 2026
 </div>
@@ -709,11 +704,23 @@ function parseRowDate(r) {
   if (!raw) return null;
   var s = String(raw).trim();
   var m;
+  // GViz Date() format: Date(2026,5,11) — month is 0-indexed
+  m = s.match(/^Date\((\d+),(\d+),(\d+)\)/);
+  if (m) return new Date(+m[1], +m[2], +m[3]);
+  // MM/DD/YYYY
   m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) return new Date(+m[3], +m[1]-1, +m[2]);
+  // YYYY-MM-DD
   m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (m) return new Date(+m[1], +m[2]-1, +m[3]);
-  var d = new Date(s); if (!isNaN(d)) return d;
+  // D/M/YYYY or M/D/YYYY
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    var yr = +m[3] < 100 ? 2000 + +m[3] : +m[3];
+    return new Date(yr, +m[1]-1, +m[2]);
+  }
+  var d = new Date(s);
+  if (!isNaN(d)) return d;
   return null;
 }
 
@@ -859,9 +866,9 @@ function renderDashboard(rows) {
     // Determine type and direction FIRST before anything else
     var type=gs(r,'TYPE','Type','DENOMINATION','Denomination')||'Unknown';
     var tripType=gs(r,'TRIP TYPE','Trip Type')||'';
-    var isTricycle=type.toLowerCase().indexOf('tricyc')>-1||type.toLowerCase().indexOf('trike')>-1;
-    var isDep=tripType.toLowerCase().indexOf('dep')>-1;
-    var isArr=tripType.toLowerCase().indexOf('arr')>-1;
+    var isTricycle=type.toLowerCase().indexOf('tricyc')>-1||type.toLowerCase().indexOf('trike')>-1||type.toLowerCase().indexOf('tricycle')>-1||type==='TRICYCLE';
+    var isDep=tripType.toLowerCase().indexOf('dep')>-1||tripType.toLowerCase()==='departure';
+    var isArr=tripType.toLowerCase().indexOf('arr')>-1||tripType.toLowerCase()==='arrival';
 
     // Passenger count - exclude tricycle departures from main count
     var rp = g(r,'TOTAL PASSENGERS','Total Passengers','total_passengers');
@@ -1069,45 +1076,90 @@ function renderDashboard(rows) {
 
 /* ── VENDOR RENTALS ── */
 async function fetchVendorData() {
-  const URL = 'https://script.google.com/macros/s/AKfycbzzocvCWVs_gV7mrQJpJ4V0f4Hhy_kjXnSv4Zc74Aih3vHczh2fsgQnnh0qhwtMhGv8/exec';
+  // Method 1: JSONP via Apps Script
   try {
-    const response = await fetch(URL);
-    const data = await response.json();
-    return Array.isArray(data) ? data : (data.rows || []);
-  } catch (err) {
-    return [];
-  }
-}
-
-function renderVendorSection(rows) {
-  const filtered = filterRows(rows, currentPeriod);
-  let totalPaid = 0;
-  const vendors = {};
-
-  filtered.forEach(r => {
-    // This grabs the amount from columns named Amount, AMOUNT, or RENTAL FEE
-    const amt = parseFloat(r["Amount"] || r["AMOUNT"] || r["RENTAL FEE"]) || 0;
-    const name = r["STORE"] || r["Vendor"] || r["Vendor Name"] || "Unknown";
-
-    if (amt > 0) {
-      totalPaid += amt;
-      vendors[name] = (vendors[name] || 0) + amt;
+    var data = await Promise.race([
+      fetchWithJSONP(VENDOR_SCRIPT + '?action=getAll'),
+      new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'));},6000); })
+    ]);
+    var rows = Array.isArray(data) ? data : (data.data||data.rows||[]);
+    if (rows.length > 0) {
+      console.log('Vendor JSONP ok:', rows.length, 'rows. Keys:', Object.keys(rows[0]).join(', '));
+      return rows;
     }
+  } catch(e) { console.log('Vendor JSONP failed:', e.message); }
+
+  // Method 2: Published CSV (from Google AI suggestion)
+  try {
+    var vendorCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRPEm2aEvRxyI1BpRflcXL7KGTgRETDflANqrb-xMXJBw4paMMOXIWh04n8ykcRXx2hdDPNHBJpY3C/pub?output=csv&t=' + Date.now();
+    var res = await Promise.race([
+      fetch(vendorCsvUrl),
+      new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'));},8000); })
+    ]);
+    var text = await res.text();
+    if (text && text.length > 50 && text.indexOf('<!DOCTYPE') === -1) {
+      var rows = parseCSV(text);
+      if (rows.length > 0) {
+        console.log('Vendor CSV ok:', rows.length, 'rows. Keys:', Object.keys(rows[0]).join(', '));
+        return rows;
+      }
+    }
+  } catch(e2) { console.log('Vendor CSV failed:', e2.message); }
+
+  // Method 3: Apps Script direct fetch
+  try {
+    var res2 = await Promise.race([
+      fetch(VENDOR_SCRIPT + '?action=getAll&t=' + Date.now()),
+      new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'));},8000); })
+    ]);
+    var json = await res2.json();
+    var rows2 = Array.isArray(json) ? json : (json.data||json.rows||[]);
+    if (rows2.length > 0) {
+      console.log('Vendor direct fetch ok:', rows2.length, 'rows');
+      return rows2;
+    }
+  } catch(e3) { console.log('Vendor direct fetch failed:', e3.message); }
+
+  console.log('All vendor fetch methods failed');
+  return [];
+}function renderVendorSection(rows) {
+  var filtered = filterRows(rows, currentPeriod);
+  var total=0, paid=0, unpaid=0, count=filtered.length;
+  var vendors={}, types={};
+
+  filtered.forEach(function(r) {
+    var amt   = g(r,'AMOUNT ','AMOUNT','Amount','amount','RENTAL FEE','Rental Fee','FEE','Fee','TOTAL','Total'); // AMOUNT with trailing space handles Google Sheets quirk
+    var status= gs(r,'STATUS','Status','PAYMENT STATUS','Payment Status')||'';
+    var vendor= gs(r,'STORE','Store','VENDOR','Vendor','VENDOR NAME','Vendor Name','NAME','Name','STALL','Stall')||'Unknown';
+    var type  = gs(r,'STALL TYPE','Stall Type','TYPE','Type','CATEGORY','Category','stall_type')||'General';
+    var sl    = status.toLowerCase();
+    total += amt;
+    if(sl.includes('paid')&&!sl.includes('un')) paid+=amt;
+    else unpaid+=amt;
+    vendors[vendor]=(vendors[vendor]||0)+amt;
+    types[type]=(types[type]||0)+1;
   });
 
-  // Updates the "Stall Rentals" card total
-  document.getElementById('vend-total').textContent = peso(totalPaid);
-  document.getElementById('vend-paid-amt').textContent = peso(totalPaid);
-  
-  // Updates the Top Vendors list
-  const listEl = document.getElementById('vend-top-list');
-  const sortedVendors = Object.entries(vendors).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  listEl.innerHTML = sortedVendors.map(e => `
-    <div class="breakdown-row">
-      <span>${e[0]}</span>
-      <strong>${peso(e[1])}</strong>
-    </div>`).join('');
-}
+  document.getElementById('vend-total').textContent = peso(paid);
+  _rentalTotal = paid;
+  updateGrandTotal(_transportTotal);
+  var vSub = document.getElementById('vend-sub');
+  if(vSub) vSub.textContent = count > 0 ? count+' transaction'+(count!==1?'s':'')+' in period' : 'No rental data for this period';
+  document.getElementById('vend-paid-amt').textContent = peso(paid);
+  document.getElementById('vend-unpaid-amt').textContent = peso(unpaid);
+  document.getElementById('vend-count').textContent = count.toLocaleString('en-PH');
+
+  // Top vendors
+  var vSorted=Object.entries(vendors).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+  var maxV=vSorted.length>0?vSorted[0][1]:1;
+  var vEl=document.getElementById('vend-top-list');
+  vEl.innerHTML=vSorted.length===0?'<div class="no-data">No vendor data</div>':
+    vSorted.map(function(e){
+      var bp=Math.round(e[1]/maxV*100);
+      return '<div class="breakdown-row"><span class="breakdown-key" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+e[0]+'</span>'+
+        '<div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:'+bp+'%;background:#7F77DD;"></div></div>'+
+        '<span class="breakdown-val">'+peso(e[1])+'</span></div>';
+    }).join('');
 
   // Stall types
   var tSorted=Object.entries(types).sort(function(a,b){return b[1]-a[1];});
