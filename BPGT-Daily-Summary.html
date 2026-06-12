@@ -1081,61 +1081,33 @@ async function fetchVendorData() {
 
 function renderVendorSection(rows) {
   const filtered = filterRows(rows, currentPeriod);
-  let paid = 0, unpaid = 0;
+  let totalPaid = 0;
   const vendors = {};
 
   filtered.forEach(r => {
-    const amt = g(r, 'AMOUNT', 'Amount', 'RENTAL FEE') || 0;
-    const status = (gs(r, 'STATUS', 'Payment Status') || '').toLowerCase();
-    const name = gs(r, 'STORE', 'Vendor') || 'Unknown';
+    // This grabs the amount from columns named Amount, AMOUNT, or RENTAL FEE
+    const amt = parseFloat(r["Amount"] || r["AMOUNT"] || r["RENTAL FEE"]) || 0;
+    const name = r["STORE"] || r["Vendor"] || r["Vendor Name"] || "Unknown";
 
-    if (status.includes('paid') && !status.includes('un')) paid += amt;
-    else unpaid += amt;
-    vendors[name] = (vendors[name] || 0) + amt;
+    if (amt > 0) {
+      totalPaid += amt;
+      vendors[name] = (vendors[name] || 0) + amt;
+    }
   });
 
-  document.getElementById('vend-total').textContent = peso(paid);
-  document.getElementById('vend-paid-amt').textContent = peso(paid);
-  document.getElementById('vend-unpaid-amt').textContent = peso(unpaid);
+  // Updates the "Stall Rentals" card total
+  document.getElementById('vend-total').textContent = peso(totalPaid);
+  document.getElementById('vend-paid-amt').textContent = peso(totalPaid);
   
-  // This builds the list of vendors you see on the card
+  // Updates the Top Vendors list
   const listEl = document.getElementById('vend-top-list');
-  const topVendors = Object.entries(vendors).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  listEl.innerHTML = topVendors.map(e => `<div class="breakdown-row"><span>${e[0]}</span><strong>${peso(e[1])}</strong></div>`).join('');
+  const sortedVendors = Object.entries(vendors).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  listEl.innerHTML = sortedVendors.map(e => `
+    <div class="breakdown-row">
+      <span>${e[0]}</span>
+      <strong>${peso(e[1])}</strong>
+    </div>`).join('');
 }
-
-  filtered.forEach(function(r) {
-    var amt   = g(r,'AMOUNT ','AMOUNT','Amount','amount','RENTAL FEE','Rental Fee','FEE','Fee','TOTAL','Total'); // AMOUNT with trailing space handles Google Sheets quirk
-    var status= gs(r,'STATUS','Status','PAYMENT STATUS','Payment Status')||'';
-    var vendor= gs(r,'STORE','Store','VENDOR','Vendor','VENDOR NAME','Vendor Name','NAME','Name','STALL','Stall')||'Unknown';
-    var type  = gs(r,'STALL TYPE','Stall Type','TYPE','Type','CATEGORY','Category','stall_type')||'General';
-    var sl    = status.toLowerCase();
-    total += amt;
-    if(sl.includes('paid')&&!sl.includes('un')) paid+=amt;
-    else unpaid+=amt;
-    vendors[vendor]=(vendors[vendor]||0)+amt;
-    types[type]=(types[type]||0)+1;
-  });
-
-  document.getElementById('vend-total').textContent = peso(paid);
-  _rentalTotal = paid;
-  updateGrandTotal(_transportTotal);
-  document.getElementById('vend-sub').textContent = count+' transaction'+(count!==1?'s':'')+' in period';
-  document.getElementById('vend-paid-amt').textContent = peso(paid);
-  document.getElementById('vend-unpaid-amt').textContent = peso(unpaid);
-  document.getElementById('vend-count').textContent = count.toLocaleString('en-PH');
-
-  // Top vendors
-  var vSorted=Object.entries(vendors).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
-  var maxV=vSorted.length>0?vSorted[0][1]:1;
-  var vEl=document.getElementById('vend-top-list');
-  vEl.innerHTML=vSorted.length===0?'<div class="no-data">No vendor data</div>':
-    vSorted.map(function(e){
-      var bp=Math.round(e[1]/maxV*100);
-      return '<div class="breakdown-row"><span class="breakdown-key" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+e[0]+'</span>'+
-        '<div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:'+bp+'%;background:#7F77DD;"></div></div>'+
-        '<span class="breakdown-val">'+peso(e[1])+'</span></div>';
-    }).join('');
 
   // Stall types
   var tSorted=Object.entries(types).sort(function(a,b){return b[1]-a[1];});
