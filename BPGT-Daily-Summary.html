@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+  <link rel="icon" href="bpgt-logo.png" type="image/png">
   <meta name="theme-color" content="#185FA5">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1042,7 +1043,7 @@ function renderDashboard(rows) {
              sl.indexOf('waiv')>-1?'<span class="badge badge-gray">Waived</span>':
              status?'<span class="badge badge-gray">'+status+'</span>':'—';
       return '<tr><td>'+date+'</td><td>'+time+'</td><td style="font-weight:600;">'+
-        (plate||'—')+'</td><td>'+type+'</td><td>'+route+'</td><td>'+transport+
+        (denom||type||'—')+'</td><td>'+type+'</td><td>'+route+'</td><td>'+transport+
         '</td><td style="text-align:center;">'+(pax||'—')+'</td><td style="font-weight:600;">'+
         (fee>0?peso(fee):'—')+'</td><td>'+(method||'—')+'</td><td>'+sb+'</td><td>'+
         (collector||'—')+'</td></tr>';
@@ -1058,12 +1059,28 @@ function renderDashboard(rows) {
 
 /* ── VENDOR RENTALS ── */
 async function fetchVendorData() {
+  // Try JSONP via Apps Script first
   try {
-    // Try JSONP via Apps Script
-    var data = await fetchWithJSONP(VENDOR_SCRIPT + '?action=getAll');
-    return Array.isArray(data) ? data : (data.data||data.rows||[]);
+    var data = await Promise.race([
+      fetchWithJSONP(VENDOR_SCRIPT + '?action=getAll'),
+      new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timeout')); }, 6000); })
+    ]);
+    var rows = Array.isArray(data) ? data : (data.data||data.rows||[]);
+    if (rows.length > 0) return rows;
   } catch(e) {
-    console.log('Vendor fetch failed:', e.message);
+    console.log('Vendor JSONP failed:', e.message);
+  }
+  // Fallback: CSV from published vendor sheet
+  try {
+    var VENDOR_SHEET_ID = '1BpRflcXL7KGTgRETDflANqrb-xMXJBw4paMMOXIWh04n8ykcRXx2hdDPNHBJpY3C';
+    var csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-' + VENDOR_SHEET_ID + '/pub?output=csv&t=' + Date.now();
+    var res = await fetch(csvUrl);
+    var text = await res.text();
+    var rows = parseCSV(text);
+    console.log('Vendor CSV rows:', rows.length);
+    return rows;
+  } catch(e2) {
+    console.log('Vendor CSV also failed:', e2.message);
     return [];
   }
 }
