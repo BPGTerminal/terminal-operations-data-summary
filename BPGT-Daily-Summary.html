@@ -31,7 +31,7 @@
     --gray-700: #2C2C2A;
     --text: #1a1a18;
     --text-muted: #5F5E5A;
-    --text-faint: #888780;
+    --text-faint: #72716a;
     --border: rgba(0,0,0,0.1);
     --border-light: rgba(0,0,0,0.06);
     --radius: 10px;
@@ -331,7 +331,8 @@
 </style>
 </head>
 <body>
-
+<main>
+</main>
 <div class="hero-banner">
   <div class="hero-slides">
     <div class="hero-slide active" style="background-image:url('hero1.jpg')"></div>
@@ -1064,22 +1065,40 @@ function renderDashboard(rows) {
 
 /* ── VENDOR RENTALS ── */
 async function fetchVendorData() {
-  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzzocvCWVs_gV7mrQJpJ4V0f4Hhy_kjXnSv4Zc74Aih3vHczh2fsgQnnh0qhwtMhGv8/exec';
-  
+  const URL = 'https://script.google.com/macros/s/AKfycbzzocvCWVs_gV7mrQJpJ4V0f4Hhy_kjXnSv4Zc74Aih3vHczh2fsgQnnh0qhwtMhGv8/exec';
   try {
-    const response = await fetch(WEB_APP_URL);
+    const response = await fetch(URL);
     const data = await response.json();
-    // If your Web App returns the rows directly as an array:
     return Array.isArray(data) ? data : (data.rows || []);
   } catch (err) {
-    console.error('Failed to fetch rental data:', err);
     return [];
   }
 }
+
 function renderVendorSection(rows) {
-  var filtered = filterRows(rows, currentPeriod);
-  var total=0, paid=0, unpaid=0, count=filtered.length;
-  var vendors={}, types={};
+  const filtered = filterRows(rows, currentPeriod);
+  let paid = 0, unpaid = 0;
+  const vendors = {};
+
+  filtered.forEach(r => {
+    const amt = g(r, 'AMOUNT', 'Amount', 'RENTAL FEE') || 0;
+    const status = (gs(r, 'STATUS', 'Payment Status') || '').toLowerCase();
+    const name = gs(r, 'STORE', 'Vendor') || 'Unknown';
+
+    if (status.includes('paid') && !status.includes('un')) paid += amt;
+    else unpaid += amt;
+    vendors[name] = (vendors[name] || 0) + amt;
+  });
+
+  document.getElementById('vend-total').textContent = peso(paid);
+  document.getElementById('vend-paid-amt').textContent = peso(paid);
+  document.getElementById('vend-unpaid-amt').textContent = peso(unpaid);
+  
+  // This builds the list of vendors you see on the card
+  const listEl = document.getElementById('vend-top-list');
+  const topVendors = Object.entries(vendors).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  listEl.innerHTML = topVendors.map(e => `<div class="breakdown-row"><span>${e[0]}</span><strong>${peso(e[1])}</strong></div>`).join('');
+}
 
   filtered.forEach(function(r) {
     var amt   = g(r,'AMOUNT ','AMOUNT','Amount','amount','RENTAL FEE','Rental Fee','FEE','Fee','TOTAL','Total'); // AMOUNT with trailing space handles Google Sheets quirk
