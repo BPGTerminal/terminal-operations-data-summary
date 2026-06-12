@@ -1064,32 +1064,17 @@ function renderDashboard(rows) {
 
 /* ── VENDOR RENTALS ── */
 async function fetchVendorData() {
-  // Method 1: JSONP via Apps Script
+  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzzocvCWVs_gV7mrQJpJ4V0f4Hhy_kjXnSv4Zc74Aih3vHczh2fsgQnnh0qhwtMhGv8/exec';
+  
   try {
-    var data = await Promise.race([
-      fetchWithJSONP(VENDOR_SCRIPT + '?action=getAll'),
-      new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'));},6000); })
-    ]);
-    var rows = Array.isArray(data) ? data : (data.data||data.rows||[]);
-    if (rows.length > 0) { console.log('Vendor JSONP ok:', rows.length); return rows; }
-  } catch(e) { console.log('Vendor JSONP failed:', e.message); }
-
-  // Method 2: CSV from published Google Sheet (from Google AI suggestion)
-  try {
-    var vendorCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRPEm2aEvRxyI1BpRflcXL7KGTgRETDflANqrb-xMXJBw4paMMOXIWh04n8ykcRXx2hdDPNHBJpY3C/pub?output=csv&t=' + Date.now();
-    var res = await Promise.race([
-      fetch(vendorCsvUrl),
-      new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'));},8000); })
-    ]);
-    var text = await res.text();
-    if (text && text.length > 10 && !text.includes('<!DOCTYPE')) {
-      var rows = parseCSV(text);
-      console.log('Vendor CSV ok:', rows.length, 'rows. Headers:', rows.length>0?Object.keys(rows[0]).join(','):'none');
-      return rows;
-    }
-  } catch(e2) { console.log('Vendor CSV failed:', e2.message); }
-
-  return [];
+    const response = await fetch(WEB_APP_URL);
+    const data = await response.json();
+    // If your Web App returns the rows directly as an array:
+    return Array.isArray(data) ? data : (data.rows || []);
+  } catch (err) {
+    console.error('Failed to fetch rental data:', err);
+    return [];
+  }
 }
 function renderVendorSection(rows) {
   var filtered = filterRows(rows, currentPeriod);
