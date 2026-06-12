@@ -845,10 +845,16 @@ function renderDashboard(rows) {
   var payMethodCnt={Cash:0,GCash:0,Maya:0,'Bank Transfer':0};
 
   rows.forEach(function(r){
-    // Main pax count: excludes tricycle departures (they are re-counted)
+    // Determine type and direction FIRST before anything else
+    var type=gs(r,'TYPE','Type','DENOMINATION','Denomination')||'Unknown';
+    var tripType=gs(r,'TRIP TYPE','Trip Type')||'';
+    var isTricycle=type.toLowerCase().indexOf('tricyc')>-1||type.toLowerCase().indexOf('trike')>-1;
+    var isDep=tripType.toLowerCase().indexOf('dep')>-1;
+    var isArr=tripType.toLowerCase().indexOf('arr')>-1;
+
+    // Passenger count - exclude tricycle departures from main count
     var rp = g(r,'TOTAL PASSENGERS','Total Passengers','total_passengers');
     if(!isTricycle || !isDep) totalPax += rp;
-    else totalPax += 0; // tricycle dep tracked separately
     // Adults = A.M. + A.F.
     var ram=g(r,'A.M.'), raf=g(r,'A.F.');
     adults   += g(r,'ADULTS','Adults') || (ram + raf);
@@ -874,19 +880,12 @@ function renderDashboard(rows) {
     males   += rowMales;
     females += rowFemales;
 
-    var type=gs(r,'TYPE','Type','DENOMINATION','Denomination')||'Unknown';
-    var tripType=gs(r,'TRIP TYPE','Trip Type')||'';
-    var isTricycle = type.toLowerCase().indexOf('tricyc')>-1 || type.toLowerCase().indexOf('trike')>-1;
-    var isDep = tripType.toLowerCase().indexOf('dep')>-1;
-    var isArr = tripType.toLowerCase().indexOf('arr')>-1;
-    if(isDep) departures++;
-    else if(isArr) arrivals++;
-    // Separate tricycle dep pax
-    var rowPax = g(r,'TOTAL PASSENGERS','Total Passengers');
-    if(isTricycle && isDep) { tricDep++; tricDepPax+=rowPax; }
-    else if(isDep) { mainDepPax+=rowPax; }
-    else if(isArr) { mainArrPax+=rowPax; }
-
+    // Track departures/arrivals
+    if(isDep) departures++; else if(isArr) arrivals++;
+    var rowPax=g(r,'TOTAL PASSENGERS','Total Passengers');
+    if(isTricycle&&isDep){tricDep++;tricDepPax+=rowPax;}
+    else if(!isTricycle&&isDep){mainDepPax+=rowPax;}
+    else if(isArr){mainArrPax+=rowPax;}
     vehicles[type]=(vehicles[type]||0)+1;
 
     var route=gs(r,'ROUTE','Route')||'N/A';
