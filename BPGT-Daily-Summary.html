@@ -130,7 +130,12 @@
     gap: 10px; margin-bottom: 4px;
   }
   .metric-grid.pax-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  }
+  @media (max-width: 900px) {
+    .metric-grid.pax-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    }
   }
   .metric-card {
     background: #fff; border: 1px solid var(--border-light);
@@ -142,7 +147,7 @@
   .metric-card.accent-green { border-top: 3px solid #639922; }
   .metric-card.accent-red { border-top: 3px solid #E24B4A; }
   .metric-label { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; font-weight: 500; }
-  .metric-value { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1; }
+  .metric-value { font-size: 22px; font-weight: 700; color: var(--text); line-height: 1; }
   .metric-sub { font-size: 11px; color: var(--text-faint); margin-top: 4px; }
 
   .card {
@@ -278,6 +283,12 @@
     }
   }
 
+
+  @media (max-width: 768px) {
+    .metric-grid[style*="repeat(7"] {
+      grid-template-columns: repeat(4, 1fr) !important;
+    }
+  }
   @media (max-width: 600px) {
     .main { padding: 14px; }
     .header { padding: 10px 14px; }
@@ -492,7 +503,7 @@
     </div>
 
     <div class="section-label" style="margin-top:18px;">Passenger statistics</div>
-    <div class="metric-grid" style="margin-bottom:10px;">
+    <div class="metric-grid" style="margin-bottom:10px;grid-template-columns:repeat(7,1fr);">
       <div class="metric-card accent-blue">
         <div class="metric-label">Total trips</div>
         <div class="metric-value" id="m-trips">0</div>
@@ -503,11 +514,7 @@
         <div class="metric-value" id="m-pax">0</div>
         <div class="metric-sub" id="m-avgpax">dep + arr only</div>
       </div>
-      <div class="metric-card accent-amber">
-        <div class="metric-label">Tricycle dep (extra)</div>
-        <div class="metric-value" id="m-tric-pax">0</div>
-        <div class="metric-sub" id="m-tric-sub">not in main count</div>
-      </div>
+
       <div class="metric-card">
         <div class="metric-label">Adults</div>
         <div class="metric-value" id="m-adults">0</div>
@@ -838,11 +845,13 @@ function renderDashboard(rows) {
 
   rows.forEach(function(r){
     // Determine type and direction FIRST before anything else
-    var type=gs(r,'TYPE','Type','DENOMINATION','Denomination')||'Unknown';
-    var tripType=gs(r,'TRIP TYPE','Trip Type')||'';
-    var isTricycle=type.toLowerCase().indexOf('tricyc')>-1||type.toLowerCase().indexOf('trike')>-1||type.toLowerCase().indexOf('tricycle')>-1||type==='TRICYCLE';
-    var isDep=tripType.toLowerCase().indexOf('dep')>-1||tripType.toLowerCase()==='departure';
-    var isArr=tripType.toLowerCase().indexOf('arr')>-1||tripType.toLowerCase()==='arrival';
+    // In BPGT sheet: TYPE = DEPARTURE/ARRIVAL, DENOMINATION = TRICYCLE/BUS/SHUTTLE VAN
+    var tripType=gs(r,'TYPE','Type')||'';        // DEPARTURE or ARRIVAL
+    var denom=gs(r,'DENOMINATION','Denomination')||'Unknown';  // TRICYCLE, BUS, SHUTTLE VAN
+    var type=denom;  // use denomination as vehicle type for vehicle breakdown
+    var isTricycle=denom.toUpperCase().indexOf('TRICYC')>-1||denom.toUpperCase().indexOf('TRIKE')>-1;
+    var isDep=tripType.toUpperCase().indexOf('DEP')>-1;
+    var isArr=tripType.toUpperCase().indexOf('ARR')>-1;
 
     // Passenger count - exclude tricycle departures from main count
     var rp = g(r,'TOTAL PASSENGERS','Total Passengers','total_passengers');
@@ -1019,8 +1028,8 @@ function renderDashboard(rows) {
         var ampm=hh>=12?'PM':'AM'; var h12=hh%12||12;
         time = h12+':'+(mm<10?'0'+mm:mm)+' '+ampm;
       }
-      var denom=gs(r,'DENOMINATION','Denomination','denomination')||gs(r,'TYPE','Type');
-      var type=gs(r,'TYPE','Type','DENOMINATION','Denomination');
+      var denom=gs(r,'DENOMINATION','Denomination','denomination')||'—';
+      var type=gs(r,'TYPE','Type')||'—';  // DEPARTURE or ARRIVAL
       var route=gs(r,'ROUTE','Route');
       var transport=gs(r,'TRANSPORT','Transport','Group');
       var pax=g(r,'TOTAL PASSENGERS','Total Passengers')||'';
@@ -1042,6 +1051,10 @@ function renderDashboard(rows) {
   }
 
   document.getElementById('dashboard').style.display='block';
+  // If vendor data already loaded, render it now
+  if (allVendorRows && allVendorRows.length > 0) {
+    renderVendorSection(allVendorRows);
+  }
 }
 
 
@@ -1568,8 +1581,14 @@ async function loadData() {
   /* Fetch vendor data in parallel */
   fetchVendorData().then(function(vrows){
     allVendorRows = vrows;
-    if (allVendorRows.length > 0 && document.getElementById('dashboard').style.display !== 'none') {
-      renderVendorSection(allVendorRows);
+    if (allVendorRows.length > 0) {
+      // Render immediately if dashboard visible, otherwise queue for after main data loads
+      if (document.getElementById('dashboard').style.display !== 'none') {
+        renderVendorSection(allVendorRows);
+      } else {
+        // Will be called by applyFilter after main data loads
+        console.log('Vendor data ready, waiting for dashboard...');
+      }
     }
   }).catch(function(){});
 
@@ -1739,26 +1758,11 @@ if (document.readyState === 'loading') {
       </div>
     </div>
 
-    <div class="section-label" style="margin-top:18px;">Rental log <span id="rental-log-count" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;">(latest 10 records)</span></div>
-    <div class="card">
-      <div class="log-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th><th>Time</th><th>Store</th><th>Amount (₱)</th>
-              <th>Method</th><th>Status</th><th>Collector</th>
-            </tr>
-          </thead>
-          <tbody id="rental-tbody">
-            <tr><td colspan="7" class="no-data">Loading rental data...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
+    
         </div>
 
 
+    
     <div class="section-label" style="margin-top:18px;">Rental log <span id="rental-log-count" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;">(latest 10 records)</span></div>
     <div class="card">
       <div class="log-wrap">
@@ -1770,7 +1774,7 @@ if (document.readyState === 'loading') {
             </tr>
           </thead>
           <tbody id="rental-tbody">
-            <tr><td colspan="7" class="no-data">Loading rental data...</td></tr>
+            <tr><td colspan="7" class="no-data">Waiting for rental data...</td></tr>
           </tbody>
         </table>
       </div>
