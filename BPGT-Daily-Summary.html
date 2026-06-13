@@ -245,6 +245,45 @@
   .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: -2px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+
+  /* ── NARRATIVE INSIGHTS ── */
+  .insight-box {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.12);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid rgba(255,255,255,0.4);
+    font-size: 12px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.85);
+  }
+  .insight-box.dark {
+    background: var(--gray-50);
+    border-left: 3px solid var(--blue-mid);
+    color: var(--text-muted);
+  }
+  .insight-box .insight-highlight {
+    color: #fff;
+    font-weight: 600;
+  }
+  .insight-box.dark .insight-highlight {
+    color: var(--blue);
+    font-weight: 600;
+  }
+  .insight-tag {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .tag-good { background: rgba(99,153,34,0.2); color: #639922; }
+  .tag-warn { background: rgba(239,159,39,0.2); color: #BA7517; }
+  .tag-info { background: rgba(55,138,221,0.2); color: #185FA5; }
+  .tag-alert { background: rgba(226,75,74,0.2); color: #A32D2D; }
+
   /* ===== PRINT STYLES ===== */
   @media print {
     body { background: #fff; font-size: 11px; }
@@ -452,6 +491,7 @@
         <span style="font-size:36px;opacity:0.2;">📈</span>
       </div>
     </div>
+    <div id="insight-grand" class="insight-box dark" style="margin-bottom:4px;"></div>
 
     <div class="section-label">Revenue</div>
     <div class="revenue-hero">
@@ -467,6 +507,7 @@
         <div><div class="rev-item-label">Bank</div><div class="rev-item-val" id="rev-bank">₱0</div></div>
       </div>
     </div>
+    <div id="insight-revenue" class="insight-box" style="margin-bottom:16px;"></div>
 
     <div class="section-label">Financial overview</div>
     <div class="metric-grid pax-grid" style="margin-bottom:10px;">
@@ -542,6 +583,8 @@
       </div>
     </div>
 
+    <div id="insight-passengers" class="insight-box dark" style="margin-bottom:16px;"></div>
+
     <!-- PASSENGER BREAKDOWN CHART -->
     <div class="two-col" style="margin-bottom:10px;">
       <div class="card">
@@ -602,7 +645,9 @@
       </div>
     </div>
 
-    <div class="section-label" style="margin-top:18px;">Trip log <span id="log-count" style="font-weight:400;text-transform:none;letter-spacing:0;"></span></div>
+    <div id="insight-staff" class="insight-box dark" style="margin-top:12px;margin-bottom:16px;"></div>
+
+    <div class="section-label" style="margin-top:4px;">Trip log <span id="log-count" style="font-weight:400;text-transform:none;letter-spacing:0;"></span></div>
     <div class="card">
       <div class="log-wrap">
         <table>
