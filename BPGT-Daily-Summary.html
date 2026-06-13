@@ -601,6 +601,23 @@
       </div>
     </div>
 
+    <div class="section-label" style="margin-top:18px;">Rental log <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;">(latest 20 records)</span></div>
+    <div class="card">
+      <div class="log-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th><th>Time</th><th>Store</th><th>Amount (₱)</th>
+              <th>Method</th><th>Status</th><th>Collector</th>
+            </tr>
+          </thead>
+          <tbody id="rental-tbody">
+            <tr><td colspan="7" class="no-data">Loading rental data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="section-label" style="margin-top:18px;">Staff performance</div>
     <div class="two-col" style="margin-bottom:4px;">
       <div class="card">
@@ -1028,8 +1045,8 @@ function renderDashboard(rows) {
   if (allVendorRows.length > 0) renderVendorSection(allVendorRows);
 
   /* TRIP LOG */
-  var displayed=rows.slice().reverse().slice(0,50);
-  setEl('log-count','('+displayed.length+' of '+rows.length+' records)');
+  var displayed=rows.slice().reverse().slice(0,20);
+  setEl('log-count','(latest '+displayed.length+' of '+rows.length+' records)');
   var tbody=document.getElementById('trip-tbody');
   if(displayed.length===0){
     tbody.innerHTML='<tr><td colspan="11" class="no-data">No trips found for this period.</td></tr>';
@@ -1076,84 +1093,149 @@ function renderDashboard(rows) {
 
 /* ── VENDOR RENTALS ── */
 function renderVendorSection(rows) {
-  // Filter by current period using RENTAL DATE column
+  // Parse RENTAL DATE using same logic as main dates
+  function parseVendorDate(r) {
+    var raw = r['RENTAL DATE'] || r['Rental Date'] || r['DATE'] || r['date'] || '';
+    if (!raw) return null;
+    var s = String(raw).trim();
+    // GViz Date() format
+    var m = s.match(/^Date\((\d+),(\d+),(\d+)\)/);
+    if (m) return new Date(+m[1], +m[2], +m[3]);
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) return new Date(+m[3], +m[1]-1, +m[2]);
+    m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+    var d = new Date(s); return isNaN(d) ? null : d;
+  }
+
+  // Filter by period
+  var now = phNow();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   var filtered = rows.filter(function(r) {
-    // Temporarily swap TRIP DATE key so filterRows works
-    var clone = {};
-    Object.keys(r).forEach(function(k){ clone[k] = r[k]; });
-    clone['TRIP DATE'] = r['RENTAL DATE'] || r['Rental Date'] || r['DATE'] || r['date'] || '';
-    return filterRows([clone], currentPeriod).length > 0;
+    var d = parseVendorDate(r);
+    if (!d) return true; // include if no date (show all)
+    if (currentPeriod === 'today') {
+      return d.getFullYear()===today.getFullYear() && d.getMonth()===today.getMonth() && d.getDate()===today.getDate();
+    }
+    if (currentPeriod === 'week') {
+      var ws = new Date(today); ws.setDate(today.getDate()-today.getDay());
+      return d >= ws && d <= now;
+    }
+    if (currentPeriod === 'month') {
+      return d.getFullYear()===today.getFullYear() && d.getMonth()===today.getMonth();
+    }
+    if (currentPeriod === 'quarter') {
+      var q = Math.floor(today.getMonth()/3);
+      var qs = new Date(today.getFullYear(), q*3, 1);
+      return d >= qs && d <= now;
+    }
+    if (currentPeriod === 'year') {
+      return d.getFullYear() === today.getFullYear();
+    }
+    if (currentPeriod === 'custom') {
+      var fv = document.getElementById('range-from').value;
+      var tv = document.getElementById('range-to').value;
+      if (!fv && !tv) return true;
+      var fp = fv ? fv.split('-').map(Number) : null;
+      var tp = tv ? tv.split('-').map(Number) : null;
+      var fd = fp ? new Date(fp[0],fp[1]-1,fp[2],0,0,0) : null;
+      var td2 = tp ? new Date(tp[0],tp[1]-1,tp[2],23,59,59) : null;
+      if (fd && d < fd) return false;
+      if (td2 && d > td2) return false;
+      return true;
+    }
+    return true;
   });
 
   var paid=0, unpaid=0, count=filtered.length;
-  var vendors={}, types={}, collectors={};
+  var vendors={}, payMethods={};
 
   filtered.forEach(function(r) {
-    // Exact columns: TRANSACTION NUMBER | STORE | RENTAL DATE | RENTAL TIME | AMOUNT  | PAYMENT METHOD | TICKET RECORD | RECEIPT NUMBER | COLLECTOR | TIMESTAMP
-    var amt       = parseFloat(String(r['AMOUNT']||r['Amount']||r['AMOUNT ']||'0').replace(/[^\d.]/g,''))||0;
-    var ticketRec = (r['TICKET RECORD']||r['Ticket Record']||'').toLowerCase();
-    var store     = r['STORE']||r['Store']||'Unknown';
-    var method    = r['PAYMENT METHOD']||r['Payment Method']||'Cash';
-    var collector = r['COLLECTOR']||r['Collector']||'Unknown';
+    var amt = parseFloat(String(r['AMOUNT']||r['Amount']||r['AMOUNT ']||'0').replace(/[^\d.]/g,''))||0;
+    var ticket = (r['TICKET RECORD']||r['Ticket Record']||'').toLowerCase();
+    var store = r['STORE']||r['Store']||'Unknown';
+    var method = r['PAYMENT METHOD']||r['Payment Method']||'Cash';
 
-    // TICKET RECORD = "PAID" or "UNPAID" — use as payment status
-    if (ticketRec.indexOf('paid') > -1 && ticketRec.indexOf('un') === -1) {
+    if (ticket.indexOf('paid')>-1 && ticket.indexOf('un')===-1) {
       paid += amt;
-    } else {
+    } else if (ticket.indexOf('unpaid')>-1) {
       unpaid += amt;
+    } else {
+      paid += amt; // default to paid if no status
     }
-
-    vendors[store]     = (vendors[store]||0) + amt;
-    types[method]      = (types[method]||0) + 1;
-    collectors[collector] = (collectors[collector]||0) + amt;
+    vendors[store] = (vendors[store]||0) + amt;
+    payMethods[method] = (payMethods[method]||0) + 1;
   });
 
-  var total = paid + unpaid;
-
-  // Update hero card
+  // Update UI
   var el = document.getElementById('vend-total');
   if (el) el.textContent = peso(paid);
   var sub = document.getElementById('vend-sub');
-  if (sub) sub.textContent = count > 0 ? count + ' transaction' + (count!==1?'s':'') + ' in period' : 'No rental data for this period';
-  var paidEl = document.getElementById('vend-paid-amt');
-  if (paidEl) paidEl.textContent = peso(paid);
-  var unpaidEl = document.getElementById('vend-unpaid-amt');
-  if (unpaidEl) unpaidEl.textContent = peso(unpaid);
-  var cntEl = document.getElementById('vend-count');
-  if (cntEl) cntEl.textContent = count.toLocaleString('en-PH');
+  if (sub) sub.textContent = count > 0 ? count+' transaction'+(count!==1?'s':'')+' in period' : 'No rental data for this period';
+  var pEl = document.getElementById('vend-paid-amt'); if(pEl) pEl.textContent = peso(paid);
+  var uEl = document.getElementById('vend-unpaid-amt'); if(uEl) uEl.textContent = peso(unpaid);
+  var cEl = document.getElementById('vend-count'); if(cEl) cEl.textContent = count.toLocaleString('en-PH');
 
-  // Update grand total bar
+  // Update grand total
   _rentalTotal = paid;
   updateGrandTotal(_transportTotal);
 
-  // Top vendors by amount
+  // Top vendors
   var vSorted = Object.entries(vendors).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
-  var maxV = vSorted.length > 0 ? vSorted[0][1] : 1;
-  var vEl = document.getElementById('vend-top-list');
-  if (vEl) {
-    vEl.innerHTML = vSorted.length === 0 ? '<div class="no-data">No vendor data</div>' :
+  var maxV = vSorted.length>0?vSorted[0][1]:1;
+  var vEl2 = document.getElementById('vend-top-list');
+  if (vEl2) {
+    vEl2.innerHTML = vSorted.length===0 ? '<div class="no-data">No vendor data</div>' :
       vSorted.map(function(e){
-        var bp = Math.round(e[1]/maxV*100);
-        return '<div class="breakdown-row"><span class="breakdown-key" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+e[0]+'">'+e[0]+'</span>'+
+        var bp=Math.round(e[1]/maxV*100);
+        return '<div class="breakdown-row"><span class="breakdown-key" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+e[0]+'">'+e[0]+'</span>'+
           '<div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:'+bp+'%;background:#7F77DD;"></div></div>'+
           '<span class="breakdown-val">'+peso(e[1])+'</span></div>';
       }).join('');
   }
 
-  // Payment method breakdown
-  var tSorted = Object.entries(types).sort(function(a,b){return b[1]-a[1];});
-  var maxT = tSorted.length > 0 ? tSorted[0][1] : 1;
-  var tEl = document.getElementById('vend-type-list');
-  if (tEl) {
-    tEl.innerHTML = tSorted.length === 0 ? '<div class="no-data">No data</div>' :
-      tSorted.map(function(e){
-        var bp = Math.round(e[1]/maxT*100);
+  // Payment methods
+  var pmSorted = Object.entries(payMethods).sort(function(a,b){return b[1]-a[1];});
+  var maxPM = pmSorted.length>0?pmSorted[0][1]:1;
+  var tEl2 = document.getElementById('vend-type-list');
+  if (tEl2) {
+    tEl2.innerHTML = pmSorted.length===0 ? '<div class="no-data">No data</div>' :
+      pmSorted.map(function(e){
+        var bp=Math.round(e[1]/maxPM*100);
         return '<div class="breakdown-row"><span class="breakdown-key">'+e[0]+'</span>'+
           '<div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:'+bp+'%;background:#5B3FA5;"></div></div>'+
           '<span class="breakdown-val">'+e[1]+'</span></div>';
       }).join('');
   }
+
+  // Rental log - last 20 entries
+  var logEl = document.getElementById('rental-tbody');
+  if (logEl) {
+    var logRows = filtered.slice().reverse().slice(0,20);
+    if (logRows.length===0) {
+      logEl.innerHTML = '<tr><td colspan="7" class="no-data">No rental records for this period.</td></tr>';
+    } else {
+      logEl.innerHTML = logRows.map(function(r){
+        var date = r['RENTAL DATE']||r['Rental Date']||'—';
+        var time = r['RENTAL TIME']||r['Rental Time']||'—';
+        var store = r['STORE']||r['Store']||'—';
+        var amt = parseFloat(String(r['AMOUNT']||r['Amount']||'0').replace(/[^\d.]/g,''))||0;
+        var method = r['PAYMENT METHOD']||r['Payment Method']||'—';
+        var ticket = r['TICKET RECORD']||r['Ticket Record']||'—';
+        var collector = r['COLLECTOR']||r['Collector']||'—';
+        var tl = ticket.toLowerCase();
+        var badge = tl.indexOf('paid')>-1&&tl.indexOf('un')===-1 ?
+          '<span class="badge badge-green">Paid</span>' :
+          tl.indexOf('unpaid')>-1 ? '<span class="badge badge-amber">Unpaid</span>' :
+          '<span class="badge badge-gray">'+ticket+'</span>';
+        return '<tr><td>'+date+'</td><td>'+time+'</td><td style="font-weight:600;">'+store+'</td>'+
+          '<td style="font-weight:600;">'+(amt>0?peso(amt):'—')+'</td>'+
+          '<td>'+method+'</td><td>'+badge+'</td><td>'+collector+'</td></tr>';
+      }).join('');
+    }
+  }
 }
+
 
 async function fetchVendorData() {
   var VENDOR_SHEET_ID = '1eXx4YHwKD-WDKrMRxgfKUVlZtGe0XBSf3qtPHQG8Qy8';
