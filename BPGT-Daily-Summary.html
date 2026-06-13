@@ -129,6 +129,9 @@
     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 10px; margin-bottom: 4px;
   }
+  .metric-grid.pax-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
   .metric-card {
     background: #fff; border: 1px solid var(--border-light);
     border-radius: var(--radius); padding: 13px 15px; box-shadow: var(--shadow);
@@ -455,7 +458,7 @@
     </div>
 
     <div class="section-label">Financial overview</div>
-    <div class="metric-grid" style="margin-bottom:10px;grid-template-columns:repeat(4,1fr);grid-template-rows:auto auto;">
+    <div class="metric-grid pax-grid" style="margin-bottom:10px;">
       <div class="metric-card accent-green">
         <div class="metric-label">Paid</div>
         <div class="metric-value" id="fin-paid">0</div>
@@ -611,11 +614,7 @@
   </div>
 </div>
 
-<div class="footer" id="footer">
-  <img src="pagong-logo.png" style="width:36px;height:36px;vertical-align:middle;margin-right:6px;border-radius:50%;background:#fff;padding:3px;opacity:1;image-rendering:crisp-edges;" alt="pagong"><br>
-  BPGT Terminal Monitoring System v4.4 · Brooke's Point Grand Terminal, Palawan<br>
-  Built by Joey S. Heredero · <em>-=pagong=-</em> · 2026
-</div>
+
 
 <script>
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz7jGjhJ_Ca59EYk8iHkYCzvnLfv5pDJzkexqUR-d6VLfP21mXU3xEhdecwBFJgB4dL/exec';
@@ -1374,8 +1373,8 @@ var _allRoutes = {};
 function renderRoutes(routes) {
   _allRoutes = routes;
   var sorted = Object.entries(routes).sort(function(a,b){return b[1]-a[1];});
-  var top10 = sorted.slice(0,10);
-  var rest  = sorted.slice(10);
+  var top10 = sorted.slice(0,8);
+  var rest  = sorted.slice(8);
   var maxR  = sorted.length>0 ? sorted[0][1] : 1;
 
   function makeRow(k,v) {
@@ -1395,7 +1394,7 @@ function renderRoutes(routes) {
   if (btn) {
     if (rest.length > 0) {
       btn.style.display='block';
-      btn.textContent='▼ Show ' + rest.length + ' more route' + (rest.length!==1?'s':'');
+      btn.textContent='▼ ' + rest.length + ' more route' + (rest.length!==1?'s':'');
     } else {
       btn.style.display='none';
     }
@@ -1710,6 +1709,8 @@ if (document.readyState === 'loading') {
 }
 
 </script>
+
+
 </body>
 </html>
 
@@ -1755,6 +1756,9 @@ if (document.readyState === 'loading') {
       </div>
     </div>
 
+        </div>
+
+
     <div class="section-label" style="margin-top:18px;">Rental log <span id="rental-log-count" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;">(latest 10 records)</span></div>
     <div class="card">
       <div class="log-wrap">
@@ -1772,3 +1776,10 @@ if (document.readyState === 'loading') {
       </div>
     </div>
 
+<div class="footer" id="footer">
+  <img src="pagong-logo.png" style="width:36px;height:36px;vertical-align:middle;margin-right:6px;border-radius:50%;background:#fff;padding:3px;opacity:1;image-rendering:crisp-edges;" alt="pagong"><br>
+  BPGT Terminal Monitoring System v4.4 · Brooke's Point Grand Terminal, Palawan<br>
+  Built by Joey S. Heredero · <em>-=pagong=-</em> · 2026
+</div>
+</body>
+</html>
