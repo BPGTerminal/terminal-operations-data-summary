@@ -1075,105 +1075,138 @@ function renderDashboard(rows) {
 
 
 /* ── VENDOR RENTALS ── */
+function renderVendorSection(rows) {
+  // Filter by current period using RENTAL DATE column
+  var filtered = rows.filter(function(r) {
+    // Temporarily swap TRIP DATE key so filterRows works
+    var clone = {};
+    Object.keys(r).forEach(function(k){ clone[k] = r[k]; });
+    clone['TRIP DATE'] = r['RENTAL DATE'] || r['Rental Date'] || r['DATE'] || r['date'] || '';
+    return filterRows([clone], currentPeriod).length > 0;
+  });
+
+  var paid=0, unpaid=0, count=filtered.length;
+  var vendors={}, types={}, collectors={};
+
+  filtered.forEach(function(r) {
+    // Exact columns: TRANSACTION NUMBER | STORE | RENTAL DATE | RENTAL TIME | AMOUNT  | PAYMENT METHOD | TICKET RECORD | RECEIPT NUMBER | COLLECTOR | TIMESTAMP
+    var amt       = parseFloat(String(r['AMOUNT']||r['Amount']||r['AMOUNT ']||'0').replace(/[^\d.]/g,''))||0;
+    var ticketRec = (r['TICKET RECORD']||r['Ticket Record']||'').toLowerCase();
+    var store     = r['STORE']||r['Store']||'Unknown';
+    var method    = r['PAYMENT METHOD']||r['Payment Method']||'Cash';
+    var collector = r['COLLECTOR']||r['Collector']||'Unknown';
+
+    // TICKET RECORD = "PAID" or "UNPAID" — use as payment status
+    if (ticketRec.indexOf('paid') > -1 && ticketRec.indexOf('un') === -1) {
+      paid += amt;
+    } else {
+      unpaid += amt;
+    }
+
+    vendors[store]     = (vendors[store]||0) + amt;
+    types[method]      = (types[method]||0) + 1;
+    collectors[collector] = (collectors[collector]||0) + amt;
+  });
+
+  var total = paid + unpaid;
+
+  // Update hero card
+  var el = document.getElementById('vend-total');
+  if (el) el.textContent = peso(paid);
+  var sub = document.getElementById('vend-sub');
+  if (sub) sub.textContent = count > 0 ? count + ' transaction' + (count!==1?'s':'') + ' in period' : 'No rental data for this period';
+  var paidEl = document.getElementById('vend-paid-amt');
+  if (paidEl) paidEl.textContent = peso(paid);
+  var unpaidEl = document.getElementById('vend-unpaid-amt');
+  if (unpaidEl) unpaidEl.textContent = peso(unpaid);
+  var cntEl = document.getElementById('vend-count');
+  if (cntEl) cntEl.textContent = count.toLocaleString('en-PH');
+
+  // Update grand total bar
+  _rentalTotal = paid;
+  updateGrandTotal(_transportTotal);
+
+  // Top vendors by amount
+  var vSorted = Object.entries(vendors).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+  var maxV = vSorted.length > 0 ? vSorted[0][1] : 1;
+  var vEl = document.getElementById('vend-top-list');
+  if (vEl) {
+    vEl.innerHTML = vSorted.length === 0 ? '<div class="no-data">No vendor data</div>' :
+      vSorted.map(function(e){
+        var bp = Math.round(e[1]/maxV*100);
+        return '<div class="breakdown-row"><span class="breakdown-key" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+e[0]+'">'+e[0]+'</span>'+
+          '<div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:'+bp+'%;background:#7F77DD;"></div></div>'+
+          '<span class="breakdown-val">'+peso(e[1])+'</span></div>';
+      }).join('');
+  }
+
+  // Payment method breakdown
+  var tSorted = Object.entries(types).sort(function(a,b){return b[1]-a[1];});
+  var maxT = tSorted.length > 0 ? tSorted[0][1] : 1;
+  var tEl = document.getElementById('vend-type-list');
+  if (tEl) {
+    tEl.innerHTML = tSorted.length === 0 ? '<div class="no-data">No data</div>' :
+      tSorted.map(function(e){
+        var bp = Math.round(e[1]/maxT*100);
+        return '<div class="breakdown-row"><span class="breakdown-key">'+e[0]+'</span>'+
+          '<div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:'+bp+'%;background:#5B3FA5;"></div></div>'+
+          '<span class="breakdown-val">'+e[1]+'</span></div>';
+      }).join('');
+  }
+}
+
 async function fetchVendorData() {
-  // Method 1: JSONP via Apps Script
+  var VENDOR_SHEET_ID = '1eXx4YHwKD-WDKrMRxgfKUVlZtGe0XBSf3qtPHQG8Qy8';
+
+  // Method 1: GViz API (same reliable approach as main sheet)
+  try {
+    var url = 'https://docs.google.com/spreadsheets/d/' + VENDOR_SHEET_ID +
+              '/gviz/tq?tqx=out:json&t=' + Date.now();
+    var controller = new AbortController();
+    var timer = setTimeout(function(){ controller.abort(); }, 10000);
+    var res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    var text = await res.text();
+    var jsonStr = text.replace(/^[^(]+\(/, '').replace(/\);?\s*$/, '');
+    var resp = JSON.parse(jsonStr);
+    var table = resp.table;
+    if (table && table.cols && table.rows && table.rows.length > 0) {
+      var headers = table.cols.map(function(col){ return (col.label||col.id||'').trim(); });
+      var rows = [];
+      table.rows.forEach(function(row) {
+        if (!row.c) return;
+        var obj = {}, hasData = false;
+        row.c.forEach(function(cell, i) {
+          var val = cell ? (cell.f !== undefined && cell.f !== null ? cell.f :
+                           (cell.v !== null && cell.v !== undefined ? cell.v : '')) : '';
+          if (typeof val === 'number') val = String(val);
+          obj[headers[i]] = String(val).trim();
+          if (String(val).trim() !== '') hasData = true;
+        });
+        if (hasData) rows.push(obj);
+      });
+      console.log('Vendor GViz ok:', rows.length, 'rows');
+      if (rows.length > 0) console.log('Vendor columns:', Object.keys(rows[0]).join(' | '));
+      return rows;
+    }
+  } catch(e) { console.log('Vendor GViz failed:', e.message); }
+
+  // Method 2: JSONP via Apps Script
   try {
     var data = await Promise.race([
       fetchWithJSONP(VENDOR_SCRIPT + '?action=getAll'),
       new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'));},6000); })
     ]);
-    var rows = Array.isArray(data) ? data : (data.data||data.rows||[]);
-    if (rows.length > 0) {
-      console.log('Vendor JSONP ok:', rows.length, 'rows. Keys:', Object.keys(rows[0]).join(', '));
-      return rows;
-    }
-  } catch(e) { console.log('Vendor JSONP failed:', e.message); }
-
-  // Method 2: Published CSV (from Google AI suggestion)
-  try {
-    var vendorCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRPEm2aEvRxyI1BpRflcXL7KGTgRETDflANqrb-xMXJBw4paMMOXIWh04n8ykcRXx2hdDPNHBJpY3C/pub?output=csv&t=' + Date.now();
-    var res = await Promise.race([
-      fetch(vendorCsvUrl),
-      new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'));},8000); })
-    ]);
-    var text = await res.text();
-    if (text && text.length > 50 && text.indexOf('<!DOCTYPE') === -1) {
-      var rows = parseCSV(text);
-      if (rows.length > 0) {
-        console.log('Vendor CSV ok:', rows.length, 'rows. Keys:', Object.keys(rows[0]).join(', '));
-        return rows;
-      }
-    }
-  } catch(e2) { console.log('Vendor CSV failed:', e2.message); }
-
-  // Method 3: Apps Script direct fetch
-  try {
-    var res2 = await Promise.race([
-      fetch(VENDOR_SCRIPT + '?action=getAll&t=' + Date.now()),
-      new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'));},8000); })
-    ]);
-    var json = await res2.json();
-    var rows2 = Array.isArray(json) ? json : (json.data||json.rows||[]);
+    var rows2 = Array.isArray(data) ? data : (data.data||data.rows||[]);
     if (rows2.length > 0) {
-      console.log('Vendor direct fetch ok:', rows2.length, 'rows');
+      console.log('Vendor JSONP ok:', rows2.length, 'rows');
       return rows2;
     }
-  } catch(e3) { console.log('Vendor direct fetch failed:', e3.message); }
+  } catch(e2) { console.log('Vendor JSONP failed:', e2.message); }
 
-  console.log('All vendor fetch methods failed');
+  console.log('All vendor methods failed');
   return [];
-}function renderVendorSection(rows) {
-  var filtered = filterRows(rows, currentPeriod);
-  var total=0, paid=0, unpaid=0, count=filtered.length;
-  var vendors={}, types={};
-
-  filtered.forEach(function(r) {
-    var amt   = g(r,'AMOUNT ','AMOUNT','Amount','amount','RENTAL FEE','Rental Fee','FEE','Fee','TOTAL','Total'); // AMOUNT with trailing space handles Google Sheets quirk
-    var status= gs(r,'STATUS','Status','PAYMENT STATUS','Payment Status')||'';
-    var vendor= gs(r,'STORE','Store','VENDOR','Vendor','VENDOR NAME','Vendor Name','NAME','Name','STALL','Stall')||'Unknown';
-    var type  = gs(r,'STALL TYPE','Stall Type','TYPE','Type','CATEGORY','Category','stall_type')||'General';
-    var sl    = status.toLowerCase();
-    total += amt;
-    if(sl.includes('paid')&&!sl.includes('un')) paid+=amt;
-    else unpaid+=amt;
-    vendors[vendor]=(vendors[vendor]||0)+amt;
-    types[type]=(types[type]||0)+1;
-  });
-
-  document.getElementById('vend-total').textContent = peso(paid);
-  _rentalTotal = paid;
-  updateGrandTotal(_transportTotal);
-  var vSub = document.getElementById('vend-sub');
-  if(vSub) vSub.textContent = count > 0 ? count+' transaction'+(count!==1?'s':'')+' in period' : 'No rental data for this period';
-  document.getElementById('vend-paid-amt').textContent = peso(paid);
-  document.getElementById('vend-unpaid-amt').textContent = peso(unpaid);
-  document.getElementById('vend-count').textContent = count.toLocaleString('en-PH');
-
-  // Top vendors
-  var vSorted=Object.entries(vendors).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
-  var maxV=vSorted.length>0?vSorted[0][1]:1;
-  var vEl=document.getElementById('vend-top-list');
-  vEl.innerHTML=vSorted.length===0?'<div class="no-data">No vendor data</div>':
-    vSorted.map(function(e){
-      var bp=Math.round(e[1]/maxV*100);
-      return '<div class="breakdown-row"><span class="breakdown-key" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+e[0]+'</span>'+
-        '<div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:'+bp+'%;background:#7F77DD;"></div></div>'+
-        '<span class="breakdown-val">'+peso(e[1])+'</span></div>';
-    }).join('');
-
-  // Stall types
-  var tSorted=Object.entries(types).sort(function(a,b){return b[1]-a[1];});
-  var maxT=tSorted.length>0?tSorted[0][1]:1;
-  var tEl=document.getElementById('vend-type-list');
-  tEl.innerHTML=tSorted.length===0?'<div class="no-data">No type data</div>':
-    tSorted.map(function(e){
-      var bp=Math.round(e[1]/maxT*100);
-      return '<div class="breakdown-row"><span class="breakdown-key">'+e[0]+'</span>'+
-        '<div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:'+bp+'%;background:#5B3FA5;"></div></div>'+
-        '<span class="breakdown-val">'+e[1]+'</span></div>';
-    }).join('');
 }
-
 
 /* ── GRAND TOTAL BAR ── */
 var _transportTotal = 0;
