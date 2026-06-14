@@ -542,6 +542,7 @@
         <div id="payment-status">—</div>
       </div>
     </div>
+    <div class="narrative" id="narrative-finance" style="margin-bottom:4px;display:none;"></div>
 
     <div class="section-label" style="margin-top:18px;">Passenger statistics</div>
     <div class="metric-grid" style="margin-bottom:10px;grid-template-columns:repeat(7,1fr);">
@@ -585,6 +586,7 @@
 
     <div id="insight-passengers" class="insight-box dark" style="margin-bottom:16px;"></div>
 
+    <div class="narrative" id="narrative-passengers" style="margin-bottom:10px;display:none;"></div>
     <!-- PASSENGER BREAKDOWN CHART -->
     <div class="two-col" style="margin-bottom:10px;">
       <div class="card">
@@ -1100,6 +1102,25 @@ function renderDashboard(rows) {
   if (allVendorRows && allVendorRows.length > 0) {
     renderVendorSection(allVendorRows);
   }
+
+  // Generate key point narratives
+  var topColl = Object.entries(collectors).sort(function(a,b){return b[1]-a[1];})[0];
+  var topCollRev = Object.entries(collRevenue).sort(function(a,b){return b[1]-a[1];})[0];
+  var topPM = Object.entries(payMethodAmt||{}).sort(function(a,b){return b[1]-a[1];})[0];
+  generateNarratives({
+    paidFee: paidFee, paidCount: paidCount,
+    unpaidFee: unpaidFee, unpaidCount: unpaidCount,
+    waivedFee: waivedFee, waivedCount: waivedCount,
+    avgFee: paidCount>0?Math.round(paidFee/paidCount):0,
+    topPayMethod: topPM ? topPM[0] : 'Cash',
+    trips: trips, totalPax: totalPax,
+    seniors: seniors, pwd: pwd, preg: preg,
+    mainDepPax: mainDepPax, mainArrPax: mainArrPax,
+    topCollector: topColl ? topColl[0] : null,
+    topCollectorTrips: topColl ? topColl[1] : 0,
+    topCollectorRev: topCollRev ? topCollRev[1] : 0,
+    collectorCount: Object.keys(collectors).length
+  });
 }
 
 
@@ -1194,6 +1215,23 @@ function renderVendorSection(rows) {
   // Update grand total
   _rentalTotal = paid;
   updateGrandTotal(_transportTotal);
+
+  // Vendor narrative
+  var vendNarr = document.getElementById('narrative-vendor');
+  if (vendNarr && count > 0) {
+    var vLines = [];
+    var topVendEntry = Object.entries(vendors).sort(function(a,b){return b[1]-a[1];})[0];
+    vLines.push('🏪 <strong>' + peso(paid) + '</strong> collected from <strong>' + count + '</strong> stall rental transaction' + (count!==1?'s':'') + ' for ' + getPeriodLabel().label + '.');
+    if (topVendEntry) {
+      vLines.push('🥇 Top earner: <strong>' + topVendEntry[0] + '</strong> — <strong>' + peso(topVendEntry[1]) + '</strong>.');
+    }
+    if (unpaid > 0) {
+      vLines.push('⚠️ <strong>' + peso(unpaid) + '</strong> in unpaid rentals needs follow-up.');
+    }
+    vendNarr.className = unpaid > 0 ? 'narrative warn' : 'narrative good';
+    vendNarr.innerHTML = vLines.join('<br>');
+    vendNarr.style.display = 'block';
+  }
 
   // Top vendors
   var vSorted = Object.entries(vendors).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
@@ -1368,6 +1406,85 @@ function toggleCollectors(type) {
     moreEl.style.display='none';
     var n = type==='list' ? Math.max(0,Object.keys(_collData).length-3) : Math.max(0,Object.keys(_collRevData).length-3);
     btn.textContent='▼ '+n+' more'+(type==='list'?' collector'+(n!==1?'s':''):'');
+  }
+}
+
+
+/* ── KEY POINT NARRATIVES ── */
+function generateNarratives(data) {
+  var pd = getPeriodLabel().label;
+
+  // ── 1. REVENUE NARRATIVE ──
+  var revEl = document.getElementById('narrative-revenue');
+  if (revEl) {
+    var lines = [];
+    if (data.paidFee > 0) {
+      var topMethod = data.topPayMethod || 'Cash';
+      lines.push('💰 <strong>' + peso(data.paidFee) + '</strong> collected for ' + pd + ' across <strong>' + data.paidCount + ' transactions</strong> — all via ' + topMethod + '.');
+    }
+    if (data.unpaidCount > 0) {
+      lines.push('⚠️ <strong>' + data.unpaidCount + ' unpaid</strong> transaction' + (data.unpaidCount!==1?'s':'') + ' totalling <strong>' + peso(data.unpaidFee) + '</strong> still pending collection.');
+    }
+    if (data.waivedCount > 0) {
+      lines.push('📋 <strong>' + data.waivedCount + '</strong> waived — <strong>' + peso(data.waivedFee) + '</strong> in forgone terminal fees.');
+    }
+    if (lines.length > 0) {
+      var cls = data.unpaidCount > 5 ? 'warn' : 'good';
+      revEl.className = 'narrative ' + cls;
+      revEl.innerHTML = lines.join('<br>');
+      revEl.style.display = 'block';
+    }
+  }
+
+  // ── 2. FINANCE NARRATIVE ──
+  var finEl = document.getElementById('narrative-finance');
+  if (finEl) {
+    var collRate = data.paidCount + data.unpaidCount + data.waivedCount > 0
+      ? Math.round(data.paidCount / (data.paidCount + data.unpaidCount + data.waivedCount) * 100) : 0;
+    var finLines = [];
+    finLines.push('📊 Collection rate: <strong>' + collRate + '%</strong> of transactions paid. Average fee per trip: <strong>' + peso(data.avgFee) + '</strong>.');
+    if (collRate < 90 && data.paidCount > 0) {
+      finLines.push('💡 Consider follow-up on the <strong>' + data.unpaidCount + '</strong> unpaid to close the gap.');
+    } else if (collRate >= 98) {
+      finLines.push('🌟 Excellent collection performance this period!');
+    }
+    finEl.className = collRate >= 95 ? 'narrative good' : collRate >= 85 ? 'narrative info' : 'narrative warn';
+    finEl.innerHTML = finLines.join('<br>');
+    finEl.style.display = 'block';
+  }
+
+  // ── 3. PASSENGER NARRATIVE ──
+  var paxEl = document.getElementById('narrative-passengers');
+  if (paxEl) {
+    var paxLines = [];
+    var avgPax = data.trips > 0 ? Math.round(data.totalPax / data.trips) : 0;
+    paxLines.push('🚌 <strong>' + data.trips.toLocaleString('en-PH') + ' trips</strong> served <strong>' + data.totalPax.toLocaleString('en-PH') + ' passengers</strong> this period — avg <strong>' + avgPax + ' per trip</strong>.');
+    if (data.seniors > 0 || data.pwd > 0 || data.preg > 0) {
+      var special = [];
+      if (data.seniors > 0) special.push('<strong>' + data.seniors + '</strong> senior' + (data.seniors!==1?'s':''));
+      if (data.pwd > 0) special.push('<strong>' + data.pwd + '</strong> PWD');
+      if (data.preg > 0) special.push('<strong>' + data.preg + '</strong> pregnant');
+      paxLines.push('💜 Priority passengers: ' + special.join(', ') + ' — ensure priority lane compliance.');
+    }
+    if (data.mainDepPax > 0 || data.mainArrPax > 0) {
+      paxLines.push('➡️ <strong>' + data.mainDepPax.toLocaleString('en-PH') + '</strong> departed · <strong>' + data.mainArrPax.toLocaleString('en-PH') + '</strong> arrived (Bus/Van only).');
+    }
+    paxEl.className = 'narrative info';
+    paxEl.innerHTML = paxLines.join('<br>');
+    paxEl.style.display = 'block';
+  }
+
+  // ── 4. STAFF NARRATIVE ──
+  var staffEl = document.getElementById('narrative-staff');
+  if (staffEl && data.topCollector) {
+    var staffLines = [];
+    staffLines.push('🏆 Top collector: <strong>' + data.topCollector + '</strong> with <strong>' + data.topCollectorTrips + ' trips</strong> and <strong>' + peso(data.topCollectorRev) + '</strong> collected.');
+    if (data.collectorCount > 1) {
+      staffLines.push('👥 <strong>' + data.collectorCount + '</strong> collectors active this period.');
+    }
+    staffEl.className = 'narrative good';
+    staffEl.innerHTML = staffLines.join('<br>');
+    staffEl.style.display = 'block';
   }
 }
 
@@ -1792,6 +1909,7 @@ if (document.readyState === 'loading') {
         <div><div class="rev-item-label">Transactions</div><div class="rev-item-val" id="vend-count">0</div></div>
       </div>
     </div>
+    <div class="narrative" id="narrative-vendor" style="margin-bottom:10px;display:none;"></div>
     <div class="two-col" style="margin-bottom:4px;">
       <div class="card">
         <div class="card-title">Top vendors by payment</div>
