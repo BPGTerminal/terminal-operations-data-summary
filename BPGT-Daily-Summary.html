@@ -379,11 +379,53 @@
     .hero-line1 em, .hero-line2 em { font-size: 30px; }
     .hero-line3 { font-size: 14px; }
   }
-  @media print { .hero-banner { display: none !important; } }
+  /* ===== SEARCH MODAL ===== */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: none; align-items: center; justify-content: center; z-index: 1000;
+    backdrop-filter: blur(4px);
+  }
+  .modal-content {
+    background: #fff; width: 90%; max-width: 800px; max-height: 85vh;
+    border-radius: 14px; box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .modal-header {
+    padding: 16px 20px; background: var(--blue); color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-body { padding: 20px; overflow-y: auto; }
+  .modal-close { cursor: pointer; font-size: 24px; line-height: 1; opacity: 0.8; }
+  .modal-close:hover { opacity: 1; }
+  .search-result-item {
+    border: 1px solid var(--border-light); border-radius: 8px;
+    padding: 12px; margin-bottom: 10px; background: var(--gray-50);
+  }
+  .search-result-item:hover { border-color: var(--blue-mid); }
+  .search-tag {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    padding: 2px 6px; border-radius: 4px; margin-bottom: 6px; display: inline-block;
+  }
+  .tag-transport { background: var(--blue-light); color: var(--blue); }
+  .tag-vendor { background: #E6E1F9; color: #5B3FA5; }
+
+  @media print { 
+    .hero-banner, .search-container, .modal-overlay { display: none !important; } 
+  }
 
 </style>
 </head>
 <body>
+
+<div id="search-modal" class="modal-overlay" onclick="if(event.target===this) closeSearch()">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="search-title">Search Results</h3>
+      <span class="modal-close" onclick="closeSearch()">&times;</span>
+    </div>
+    <div class="modal-body" id="search-results-body"></div>
+  </div>
+</div>
 
 <div class="hero-banner">
   <div class="hero-slides">
@@ -411,6 +453,11 @@
   </div>
   <div class="header-right">
     <div id="last-updated">Not yet loaded</div>
+    <div class="search-container" style="position:relative;display:flex;align-items:center;gap:6px;">
+      <input type="text" id="global-search" placeholder="Search plate, store, receipt..." 
+             style="padding:6px 10px;border-radius:var(--radius-sm);border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.15);color:#fff;font-size:12px;width:180px;outline:none;">
+      <button class="hbtn" onclick="performGlobalSearch()" style="padding:6px 10px;">🔍</button>
+    </div>
     <button class="hbtn" onclick="loadData()">
       <span id="refresh-icon">↻</span> Refresh
     </button>
@@ -1887,7 +1934,95 @@ function parseCSV(text) {
   });
 }
 
+/* ── GLOBAL SEARCH ── */
+function performGlobalSearch() {
+  var query = document.getElementById('global-search').value.trim().toUpperCase();
+  if (!query) return;
+
+  var results = [];
+  
+  // Search in Passenger/Transport Data
+  allRows.forEach(function(r) {
+    var text = JSON.stringify(r).toUpperCase();
+    if (text.indexOf(query) > -1) {
+      results.push({ type: 'TRANSPORT', data: r });
+    }
+  });
+
+  // Search in Vendor Data
+  allVendorRows.forEach(function(r) {
+    var text = JSON.stringify(r).toUpperCase();
+    if (text.indexOf(query) > -1) {
+      results.push({ type: 'VENDOR', data: r });
+    }
+  });
+
+  displaySearchResults(results, query);
+}
+
+function displaySearchResults(results, query) {
+  var body = document.getElementById('search-results-body');
+  var modal = document.getElementById('search-modal');
+  document.getElementById('search-title').textContent = 'Results for "' + query + '" (' + results.length + ')';
+  
+  if (results.length === 0) {
+    body.innerHTML = '<div class="no-data">No records found matching your search.</div>';
+  } else {
+    body.innerHTML = results.map(function(res) {
+      var r = res.data;
+      if (res.type === 'TRANSPORT') {
+        var date = gs(r,'TRIP DATE','date') || '—';
+        var plate = gs(r,'PLATE NUMBER') || '—';
+        var store = gs(r,'TRANSPORT','GROUP') || '—';
+        var fee = g(r,'FEE','AMOUNT') || 0;
+        var rcpt = gs(r,'RECEIPT NUMBER','RECEIPT') || '—';
+        var status = gs(r,'PAYMENT STATUS') || '—';
+        return '<div class="search-result-item">' +
+          '<span class="search-tag tag-transport">Transport Trip</span>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">' +
+            '<div><strong>Plate:</strong> ' + plate + '</div>' +
+            '<div><strong>Date:</strong> ' + date + '</div>' +
+            '<div><strong>Group:</strong> ' + store + '</div>' +
+            '<div><strong>Receipt:</strong> ' + rcpt + '</div>' +
+            '<div><strong>Fee:</strong> ' + peso(fee) + ' (' + status + ')</div>' +
+            '<div><strong>Route:</strong> ' + (gs(r,'ROUTE')||gs(r,'ORIGIN')+' - '+gs(r,'DESTINATION')) + '</div>' +
+          '</div>' +
+        '</div>';
+      } else {
+        var date = r['RENTAL DATE'] || r['Date'] || '—';
+        var store = r['STORE'] || '—';
+        var bp = r['BP NUMBER'] || '—';
+        var amt = parseFloat(String(r['AMOUNT']||'0').replace(/[^\d.]/g,'')) || 0;
+        var rcpt = r['RECEIPT'] || '—';
+        return '<div class="search-result-item">' +
+          '<span class="search-tag tag-vendor">Vendor Rental</span>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px;">' +
+            '<div><strong>Store:</strong> ' + store + '</div>' +
+            '<div><strong>BP No:</strong> ' + bp + '</div>' +
+            '<div><strong>Date:</strong> ' + date + '</div>' +
+            '<div><strong>Receipt:</strong> ' + rcpt + '</div>' +
+            '<div><strong>Amount:</strong> ' + peso(amt) + '</div>' +
+            '<div><strong>Collector:</strong> ' + (r['COLLECTOR']||'—') + '</div>' +
+          '</div>' +
+        '</div>';
+      }
+    }).join('');
+  }
+  
+  modal.style.display = 'flex';
+}
+
+function closeSearch() {
+  document.getElementById('search-modal').style.display = 'none';
+}
+
+// Add Enter key listener for search
+document.getElementById('global-search').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') performGlobalSearch();
+});
+
 loadData();
+
 
 /* ── PWA SERVICE WORKER ── */
 if ('serviceWorker' in navigator) {
@@ -1918,7 +2053,7 @@ if (document.readyState === 'loading') {
 </script>
 
 
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a14a07af9cade2ec',t:'MTc4Mjk1NzM0NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
 
