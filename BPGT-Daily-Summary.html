@@ -516,6 +516,11 @@
         <div class="metric-value" id="fin-paid">0</div>
         <div class="metric-sub" id="fin-paid-amt">₱0 collected</div>
       </div>
+      <div class="metric-card accent-amber" style="border-top: 3px solid #f59e0b;">
+        <div class="metric-label">Special Pass</div>
+        <div class="metric-value" id="fin-special">0</div>
+        <div class="metric-sub" id="fin-special-amt">₱0 collected</div>
+      </div>
       <div class="metric-card accent-amber">
         <div class="metric-label">Unpaid</div>
         <div class="metric-value" id="fin-unpaid">0</div>
@@ -887,6 +892,7 @@ function renderDashboard(rows) {
   var vehicles={}, routes={}, collectors={}, collRevenue={};
   var paidFee=0, unpaidFee=0, waivedFee=0;
   var paidCount=0, unpaidCount=0, waivedCount=0;
+  var specialPassCount=0, specialPassFee=0;
   var payMethodAmt={Cash:0,GCash:0,Maya:0,'Bank Transfer':0};
   var payMethodCnt={Cash:0,GCash:0,Maya:0,'Bank Transfer':0};
 
@@ -899,6 +905,11 @@ function renderDashboard(rows) {
     var isTricycle=denom.toUpperCase().indexOf('TRICYC')>-1||denom.toUpperCase().indexOf('TRIKE')>-1;
     var isDep=tripType.toUpperCase().indexOf('DEP')>-1;
     var isArr=tripType.toUpperCase().indexOf('ARR')>-1;
+
+    // Special Pass Detection
+    var isSpecial = gs(r, 'specialPass', 'SPECIAL PASS', 'special_pass').toUpperCase() === 'YES' ||
+                    gs(r, 'feeType', 'FEE TYPE', 'fee_type').toUpperCase() === 'SPECIAL_PASS' ||
+                    (gs(r, 'feeNotes', 'FEE NOTES', 'notes').indexOf('[SPECIAL PASS') > -1);
 
     // Passenger count - exclude tricycle departures from main count
     var rp = g(r,'TOTAL PASSENGERS','Total Passengers','total_passengers');
@@ -949,6 +960,10 @@ function renderDashboard(rows) {
 
     if(sl.indexOf('paid')>-1 && sl.indexOf('un')===-1){
       paidFee+=fee; paidCount++;
+      if(isSpecial){
+        specialPassCount++;
+        specialPassFee+=fee;
+      }
       collRevenue[collector]=(collRevenue[collector]||0)+fee;
       var mkeys=Object.keys(payMethodAmt);
       var matched=false;
@@ -985,6 +1000,8 @@ function renderDashboard(rows) {
   /* FIN METRICS */
   setEl('fin-paid', paidCount.toLocaleString('en-PH'));
   setEl('fin-paid-amt', peso(paidFee)+' collected');
+  setEl('fin-special', specialPassCount.toLocaleString('en-PH'));
+  setEl('fin-special-amt', peso(specialPassFee)+' collected');
   setEl('fin-unpaid', unpaidCount.toLocaleString('en-PH'));
   setEl('fin-unpaid-amt', peso(unpaidFee)+' pending');
   setEl('fin-waived', waivedCount.toLocaleString('en-PH'));
@@ -1084,13 +1101,18 @@ function renderDashboard(rows) {
       var method=gs(r,'PAYMENT METHOD','Payment Method','METHOD','method');
       var status=gs(r,'PAYMENT STATUS','Payment Status','STATUS','status');
       var collector=gs(r,'COLLECTOR','collector','USERNAME','Username','staff','STAFF','Staff');
+      var isSpecial = gs(r, 'specialPass', 'SPECIAL PASS', 'special_pass').toUpperCase() === 'YES' ||
+                      gs(r, 'feeType', 'FEE TYPE', 'fee_type').toUpperCase() === 'SPECIAL_PASS' ||
+                      (gs(r, 'feeNotes', 'FEE NOTES', 'notes').indexOf('[SPECIAL PASS') > -1);
       var sl=status.toLowerCase();
       var sb=sl.indexOf('paid')>-1&&sl.indexOf('un')===-1?'<span class="badge badge-green">Paid</span>':
              sl.indexOf('unpaid')>-1?'<span class="badge badge-amber">Unpaid</span>':
              sl.indexOf('waiv')>-1?'<span class="badge badge-gray">Waived</span>':
              status?'<span class="badge badge-gray">'+status+'</span>':'—';
+      var typeDisplay = type;
+      if(isSpecial) typeDisplay = '<span style="color:#d97706;">🎟️ ' + type + '</span>';
       return '<tr><td>'+date+'</td><td>'+time+'</td><td style="font-weight:600;">'+
-        (denom||type||'—')+'</td><td>'+type+'</td><td>'+route+'</td><td>'+transport+
+        (denom||type||'—')+'</td><td>'+typeDisplay+'</td><td>'+route+'</td><td>'+transport+
         '</td><td style="text-align:center;">'+(pax||'—')+'</td><td style="font-weight:600;">'+
         (fee>0?peso(fee):'—')+'</td><td>'+(method||'—')+'</td><td>'+sb+'</td><td>'+
         (collector||'—')+'</td></tr>';
@@ -1111,6 +1133,7 @@ function renderDashboard(rows) {
     paidFee: paidFee, paidCount: paidCount,
     unpaidFee: unpaidFee, unpaidCount: unpaidCount,
     waivedFee: waivedFee, waivedCount: waivedCount,
+    specialPassFee: specialPassFee, specialPassCount: specialPassCount,
     avgFee: paidCount>0?Math.round(paidFee/paidCount):0,
     topPayMethod: topPM ? topPM[0] : 'Cash',
     trips: trips, totalPax: totalPax,
@@ -1421,6 +1444,9 @@ function generateNarratives(data) {
     if (data.paidFee > 0) {
       var topMethod = data.topPayMethod || 'Cash';
       lines.push('💰 <strong>' + peso(data.paidFee) + '</strong> collected for ' + pd + ' across <strong>' + data.paidCount + ' transactions</strong> — all via ' + topMethod + '.');
+      if (data.specialPassCount > 0) {
+        lines.push('🎟️ Includes <strong>' + data.specialPassCount + ' Special Pass</strong> collections totalling <strong>' + peso(data.specialPassFee) + '</strong>.');
+      }
     }
     if (data.unpaidCount > 0) {
       lines.push('⚠️ <strong>' + data.unpaidCount + ' unpaid</strong> transaction' + (data.unpaidCount!==1?'s':'') + ' totalling <strong>' + peso(data.unpaidFee) + '</strong> still pending collection.');
@@ -1892,6 +1918,7 @@ if (document.readyState === 'loading') {
 </script>
 
 
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
 
@@ -1945,7 +1972,7 @@ if (document.readyState === 'loading') {
 
 <div class="footer" id="footer">
   <img src="pagong-logo.png" style="width:36px;height:36px;vertical-align:middle;margin-right:6px;border-radius:50%;background:#fff;padding:3px;opacity:1;image-rendering:crisp-edges;" alt="pagong"><br>
-  BPGT Terminal Monitoring System v4.4 · Brooke's Point Grand Terminal, Palawan<br>
+  BPGT Terminal Monitoring System v4.6 · Brooke's Point Grand Terminal, Palawan<br>
   Built by Joey S. Heredero · <em>-=pagong=-</em> · 2026
 </div>
 </body>
